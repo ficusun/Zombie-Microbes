@@ -11,9 +11,11 @@ use input::InputPlugin;
 fn main() {
     App::new()
         .add_systems(Startup, setup)
-        .add_plugins((DefaultPlugins,
-                     RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0),
-                     RapierDebugRenderPlugin::default()))
+        .add_plugins((
+            DefaultPlugins,
+            RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0),
+            RapierDebugRenderPlugin::default(),
+        ))
         .add_plugins(CharacterPlugin)
         .add_plugins(InputPlugin)
         .add_plugins(Shape2dPlugin::default())

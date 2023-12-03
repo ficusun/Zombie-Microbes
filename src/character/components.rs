@@ -1,4 +1,3 @@
-
 use bevy::prelude::*;
 
 #[derive(Component, Deref, DerefMut, Default)]
@@ -12,6 +11,18 @@ pub struct IsPlayer;
 
 #[derive(Component, Default)]
 pub struct IsBot;
+
+#[derive(Component, Default)]
+pub struct Wave {
+    pub points_count: i32,
+    pub base_radius: f32,
+    pub rotation_speed: f32,
+    pub phase_speed: f32,
+    pub frequency: f32,
+    pub amplitude: f32,
+    pub range: f32,
+    pub strength_factor: f32,
+}
 
 #[derive(Bundle, Default)]
 pub struct PlayerBundle {
