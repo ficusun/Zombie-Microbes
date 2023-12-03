@@ -1,0 +1,12 @@
+[package]
+name = "Zombie-Microbes"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bevy = "0.12.1"
+rand = "0.8.5"
+bevy_rapier2d = { version = "*", features = [ "simd-stable", "debug-render-2d", "parallel" ] }
+bevy-inspector-egui = "0.21.0"
