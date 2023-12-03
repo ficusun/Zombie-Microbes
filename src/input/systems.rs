@@ -8,6 +8,7 @@ pub fn keyboard_input_system(
     mut players_transform: Query<&mut KinematicCharacterController, With<IsPlayer>>,
 ) {
     let mut vel = Vec3::default();
+    Vec3::from
 
     // let mut player = players_transform // : Option<Vec2>
     //     .get_single_mut().unwrap();//.translation.xy();

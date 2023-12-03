@@ -1,3 +1,4 @@
+use bevy::math::vec3;
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
 
@@ -78,6 +79,7 @@ pub fn character_spawner(
     println!("Spawned")
 }
 
+
 fn custom_cos_0_1_0(x: f32) -> f32 {
     0.5 * (1.0 + (x * 2.0 * PI + PI).cos())
 }
@@ -127,5 +129,4 @@ pub fn draw_characters(
 
             painter.circle(5.);
         }
-    }
 }
