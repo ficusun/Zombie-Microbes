@@ -6,76 +6,96 @@ use super::components::*;
 use bevy::sprite::MaterialMesh2dBundle;
 use bevy_vector_shapes::prelude::*;
 use std::f32::consts::PI;
+use bevy_rapier2d::parry::shape::SharedShape;
+use bevy_rapier2d::rapier::prelude::{ColliderBuilder};
+use rand::Rng;
 
 pub fn character_spawner(
     mut commands: Commands,
     //rapier_context: Res<RapierContext>,
+    // mut collider_set: ResMut<ColliderSet>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
-    // let mut entity_commands = commands.spawn(
-    //     MaterialMesh2dBundle {
-    //     mesh: meshes // Vec2::new(size_of_quad, size_of_quad)
-    //         .add(shape::Circle::new(def_char_stat.character_size / 2.).into()) //
-    //         .into(),
-    //     material: materials.add(ColorMaterial::from(Color::GREEN)),
-    //     transform: Transform::from_translation(Vec3::new(5., 5., 1.)),
-    //     ..default()
-    // });
+    let pos = Vec3::from((5.,5.,0.));
     let character_size = 15.;
+    let mut microbes = Vec::new();
+
+    for i in 0..90 {
+        
+        let mut children_entity_commands = commands.spawn(RigidBody::KinematicPositionBased);
+        children_entity_commands
+            //.insert(KinematicCharacterController::default())
+            .insert(Collider::ball(5.))
+            .insert(Sensor)
+            .insert(TransformBundle::from(Transform::from_xyz(pos.x,pos.y,pos.z)))
+            .insert(MicrobeBundle {
+                health: Health(100.),
+                speed: Speed(15.),
+                is_microbe: Default::default(),
+                orbit: Orbit(20. + i as f32),
+            });
+        //let _ = collider_set.insert(children_entity_commands.id(), collider);
+        microbes.push(children_entity_commands.id());
+    }
+
     let mut entity_commands = commands.spawn(RigidBody::KinematicPositionBased);
     entity_commands
-        .insert(KinematicCharacterController::default())
+        //.insert(KinematicCharacterController::default())
         .insert(Collider::ball(character_size))
-        .insert(TransformBundle::from(Transform::from_xyz(5., 5., 0.)));
-    // .insert(MaterialMesh2dBundle {
-    //     transform: Transform::from_xyz(-50.,-50.,0.),
-    //     mesh: meshes // Vec2::new(size_of_quad, size_of_quad)
-    //         .add(shape::Circle::new(character_size).into()) //
-    //         .into(),
-    //     material: materials.add(ColorMaterial::from(Color::GREEN)),
-    //     ..default()
-    // });
-    //.insert(materials.add(ColorMaterial::from(Color::GREEN)));
+        .insert(TransformBundle::from(Transform::from_xyz(pos.x,pos.y,pos.z)))
+        .insert(Camera2dBundle::default());
 
     entity_commands.insert(PlayerBundle {
         health: Health(100.),
         speed: Speed(1.),
+        microbes: Microbes(microbes.clone()),
+        draw_it: Default::default(),
     });
 
     entity_commands.insert(IsPlayer);
 
+    for id in microbes.iter() {
+        entity_commands.add_child(*id);
+    }
+
+    microbes.clear();
+
+    for i in 0..50 {
+
+        let mut children_entity_commands = commands.spawn(RigidBody::KinematicPositionBased);
+        children_entity_commands
+            //.insert(KinematicCharacterController::default())
+            .insert(Collider::ball(5.))
+            .insert(Sensor)
+            .insert(TransformBundle::from(Transform::from_xyz(pos.x,pos.y,pos.z)))
+            .insert(MicrobeBundle {
+                health: Health(100.),
+                speed: Speed(7.),
+                is_microbe: Default::default(),
+                orbit: Orbit(20. + i as f32),
+            });
+        microbes.push(children_entity_commands.id());
+    }
+
     let mut entity_commands = commands.spawn(RigidBody::KinematicPositionBased);
     entity_commands
-        .insert(KinematicCharacterController::default())
         .insert(Collider::ball(character_size))
-        .insert(TransformBundle::from(Transform::from_xyz(50., 50., 0.)));
-    // .insert(MaterialMesh2dBundle {
-    //     transform: Transform::from_xyz(50.,50.,0.),
-    //     mesh: meshes // Vec2::new(size_of_quad, size_of_quad)
-    //         .add(shape::Circle::new(character_size).into()) //
-    //         .into(),
-    //     material: materials.add(ColorMaterial::from(Color::GREEN)),
-    //     ..default()
-    // });
-    //.insert(materials.add(ColorMaterial::from(Color::GREEN)));
+        .insert(TransformBundle::from(Transform::from_xyz(pos.x,pos.y,pos.z)));
 
-    // entity_commands.insert(PlayerBundle {
-    //     health: Health(100.),
-    //     speed: Speed(1.),
-    // });
-    //
-    // entity_commands.insert(IsBot);
-    // if spawn.is_player {
-    //     entity_commands.insert(IsPlayer);
-    // } else {
-    //     entity_commands.insert(IsBot);
-    // }
+    entity_commands.insert(PlayerBundle {
+        health: Health(100.),
+        speed: Speed(1.),
+        microbes: Microbes(microbes.clone()),
+        draw_it: Default::default(),
+    });
 
-    // entity_commands.insert(SkillCooldownTime(Timer::from_seconds(
-    //     def_char_stat.skill_cooldown_time,
-    //     TimerMode::Repeating,
-    // )));
+    entity_commands.insert(IsBot);
+
+    for id in microbes.iter() {
+        entity_commands.add_child(*id);
+    }
+    
     println!("Spawned")
 }
 
@@ -86,47 +106,85 @@ fn custom_cos_0_1_0(x: f32) -> f32 {
 
 pub fn draw_characters(
     mut painter: ShapePainter,
-    mut playerQuery: Query<(&Transform, &Wave), With<IsPlayer>>,
+    // mut commands: Commands,
+    mut player_query: Query<(&Transform, &Microbes), With<DrawIt>>, // , &Wave
+    mut microbes_query: Query<(&mut Transform, &Speed, &Orbit), (With<Microbe>, Without<DrawIt>)>, // , &Wave // (With<Microbe>, Without<IsPlayer>)
     time: Res<Time>,
 ) {
-    for playerData in playerQuery.iter() {
-        painter.transform.translation = playerData.0.translation;
+    for (&transform, microbes) in player_query.iter() { // (&transform, &wave)
+        painter.transform.translation = transform.translation;
         painter.color = Color::GREEN;
         painter.circle(15.);
         painter.color = Color::RED;
+        // let waveData = wave;
 
-        let waveData = playerData.1;
+        let mut rng = rand::thread_rng();
 
-        let points_count = 90;
+        let points_count = microbes.len();
         let base_radius = 150.;
         let rotation_speed = 90.;
         let phase_speed = 90.;
         let frequency = 3.;
-        let amplitude = 300.;
-        let range = 270.;
-        let strength_factor = 1.;
+        let amplitude = 50.;
+        let range = 360.;
+        let strength_factor = 15.;
 
-        let anglIncrement = 360. / points_count as f32;
+        let angl_increment = 360. / points_count as f32;
 
-        for i in 0..points_count {
-            let time_elapsed = time.elapsed().as_secs_f32();
-            let angleDeg = i as f32 * anglIncrement;
+        let mut test = points_count as f32 / 3.;
+        for (i, entity_id) in microbes.iter().enumerate() {
+            //if let Some(entity) = commands.get_entity(*entity_id) {
+            match microbes_query.get_mut(*entity_id) {
+                Ok((mut mic_transform, speed, orbit)) => {
+                    let time_elapsed = time.delta().as_secs_f32(); // time.elapsed().as_secs_f32();
+                    let angle_deg = i as f32 * angl_increment;
 
-            let currentAngle = (angleDeg + time_elapsed * rotation_speed).to_radians();
-            let currentPhase = (angleDeg + time_elapsed * phase_speed).to_radians();
+                    let current_angle = (angle_deg + time_elapsed * (speed.0 * rng.gen_range(1.0..3.))).to_radians();
+                    let current_phase = (angle_deg + time_elapsed * phase_speed).to_radians();
 
-            let mut r = base_radius;
-            if (angleDeg < range) {
-                let percent = angleDeg / range;
-                let strength = custom_cos_0_1_0(strength_factor * percent);
-                r += strength * (currentPhase * frequency).sin() * amplitude;
+                    let mut r = orbit.0;// (((i as f32 + 1.) / test) as i32 * 50) as f32; //rng.gen_range(50.0..150.); orbit.0;
+                    if (angle_deg < range) {
+                        let percent = angle_deg / range;
+                        let strength = custom_cos_0_1_0(strength_factor * percent);
+                        r += strength * (current_phase * frequency).sin() * (amplitude); // + rng.gen_range(0.0..100.)
+                    }
+
+                    let x = current_angle.cos() * r;
+                    let y = current_angle.sin() * r;
+
+                    let mic_pos =  Vec3::from((x, y, 0.)); // transform.translation +
+                    // painter.transform.translation = mic_transform.translation + mic_pos; //transform.translation
+
+                    mic_transform.translation = mic_pos;
+                    painter.transform.translation = mic_transform.translation + transform.translation;
+                    // microbes_query.get_mut(*entity_id).unwrap().0.translation = mic_pos;
+                    painter.circle(5.);
+                }
+                Err(e) => (),
             }
-
-            let x = currentAngle.cos() * r;
-            let y = currentAngle.sin() * r;
-
-            painter.transform.translation = playerData.translation + Vec3::from((x, y, 0.));
-
-            painter.circle(5.);
+            //}
         }
+        //
+        // for i in 0..points_count {
+        //     let time_elapsed = time.elapsed().as_secs_f32();
+        //     let angle_deg = i as f32 * angl_increment;
+        //
+        //     let current_angle = (angle_deg + time_elapsed * rotation_speed).to_radians();
+        //     let current_phase = (angle_deg + time_elapsed * phase_speed).to_radians();
+        //
+        //     let mut r = base_radius;
+        //     if (angle_deg < range) {
+        //         let percent = angle_deg / range;
+        //         let strength = custom_cos_0_1_0(strength_factor * percent);
+        //         r += strength * (current_phase * frequency).sin() * amplitude;
+        //     }
+        //
+        //     let x = current_angle.cos() * r;
+        //     let y = current_angle.sin() * r;
+        //
+        //     painter.transform.translation = transform.translation + Vec3::from((x, y, 0.));
+        //
+        //     painter.circle(5.);
+        // }
+    }
 }

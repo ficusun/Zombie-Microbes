@@ -26,7 +26,7 @@ pub fn setup(mut commands: Commands) {
     // let mut test = Camera2dBundle::default();
     // test.transform.translation.z = 10.;
     // println!("{}",&test.transform.translation);
-    commands.spawn(Camera2dBundle::default());
+    // commands.spawn(Camera2dBundle::default());
 
     // test.send(SpawnCharacter { is_player: true });
 }

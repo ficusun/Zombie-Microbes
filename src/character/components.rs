@@ -6,11 +6,23 @@ pub struct Health(pub f32);
 #[derive(Component, Deref, DerefMut, Default)]
 pub struct Speed(pub f32);
 
+#[derive(Component, Deref, DerefMut, Default)]
+pub struct Orbit(pub f32);
+
+#[derive(Component, Deref, DerefMut, Default)]
+pub struct Microbes(pub Vec<Entity>);
+
 #[derive(Component, Default)]
 pub struct IsPlayer;
 
 #[derive(Component, Default)]
 pub struct IsBot;
+
+#[derive(Component, Default)]
+pub struct DrawIt;
+
+#[derive(Component, Default)]
+pub struct Microbe;
 
 #[derive(Component, Default)]
 pub struct Wave {
@@ -28,6 +40,8 @@ pub struct Wave {
 pub struct PlayerBundle {
     pub health: Health,
     pub speed: Speed,
+    pub microbes: Microbes,
+    pub draw_it: DrawIt,
     // pub is_player: IsPlayer,
 }
 
@@ -35,5 +49,6 @@ pub struct PlayerBundle {
 pub struct MicrobeBundle {
     pub health: Health,
     pub speed: Speed,
-    // pub is_player: IsPlayer,
+    pub is_microbe: Microbe,
+    pub orbit: Orbit,
 }
