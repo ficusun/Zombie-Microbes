@@ -3,6 +3,7 @@ use bevy_rapier2d::prelude::*;
 
 use super::components::*;
 use bevy::sprite::MaterialMesh2dBundle;
+use bevy_vector_shapes::prelude::*;
 
 pub fn character_spawner(
     mut commands: Commands,
@@ -24,14 +25,15 @@ pub fn character_spawner(
     entity_commands
         .insert(KinematicCharacterController::default())
         .insert(Collider::ball(character_size))
-        .insert(TransformBundle::from(Transform::from_xyz(5., 5., 0.)))
-        .insert(MaterialMesh2dBundle {
-            mesh: meshes // Vec2::new(size_of_quad, size_of_quad)
-                .add(shape::Circle::new(character_size).into()) //
-                .into(),
-            material: materials.add(ColorMaterial::from(Color::GREEN)),
-            ..default()
-        });
+        .insert(TransformBundle::from(Transform::from_xyz(5., 5., 0.)));
+        // .insert(MaterialMesh2dBundle {
+        //     transform: Transform::from_xyz(-50.,-50.,0.),
+        //     mesh: meshes // Vec2::new(size_of_quad, size_of_quad)
+        //         .add(shape::Circle::new(character_size).into()) //
+        //         .into(),
+        //     material: materials.add(ColorMaterial::from(Color::GREEN)),
+        //     ..default()
+        // });
     //.insert(materials.add(ColorMaterial::from(Color::GREEN)));
 
     entity_commands.insert(PlayerBundle {
@@ -41,6 +43,27 @@ pub fn character_spawner(
 
     entity_commands.insert(IsPlayer);
 
+    let mut entity_commands = commands.spawn(RigidBody::KinematicPositionBased);
+    entity_commands
+        .insert(KinematicCharacterController::default())
+        .insert(Collider::ball(character_size))
+        .insert(TransformBundle::from(Transform::from_xyz(50., 50., 0.)));
+        // .insert(MaterialMesh2dBundle {
+        //     transform: Transform::from_xyz(50.,50.,0.),
+        //     mesh: meshes // Vec2::new(size_of_quad, size_of_quad)
+        //         .add(shape::Circle::new(character_size).into()) //
+        //         .into(),
+        //     material: materials.add(ColorMaterial::from(Color::GREEN)),
+        //     ..default()
+        // });
+    //.insert(materials.add(ColorMaterial::from(Color::GREEN)));
+
+    // entity_commands.insert(PlayerBundle {
+    //     health: Health(100.),
+    //     speed: Speed(1.),
+    // });
+    //
+    // entity_commands.insert(IsBot);
     // if spawn.is_player {
     //     entity_commands.insert(IsPlayer);
     // } else {
@@ -52,4 +75,13 @@ pub fn character_spawner(
     //     TimerMode::Repeating,
     // )));
     println!("Spawned")
+}
+
+pub fn draw_characters (mut painter: ShapePainter, mut players_transform: Query<&Transform, With<IsPlayer>>) {
+    for transform in players_transform.iter() {
+        painter.transform.translation = transform.translation;
+        painter.color = Color::GREEN;
+        painter.circle(15.);
+        // painter.reset = true;
+    }
 }
