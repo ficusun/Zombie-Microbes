@@ -1,3 +1,4 @@
+use bevy::math::vec3;
 use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
 
@@ -80,8 +81,17 @@ pub fn character_spawner(
 pub fn draw_characters (mut painter: ShapePainter, mut players_transform: Query<&Transform, With<IsPlayer>>) {
     for transform in players_transform.iter() {
         painter.transform.translation = transform.translation;
+        painter.cap = Cap::Round;
         painter.color = Color::GREEN;
-        painter.circle(15.);
+        painter.thickness_type = ThicknessType::Pixels;
+        painter.thickness = 1.;
+        let fdsf:i32 = 4;
+        I32
+        let re = fdsf.sin();
+        println!("{}", re);
+        // painter.line(Vec3::default(), transform.translation);
+        painter.arc(15., 0., 3.14 * 2.);
+        //painter.circle(15.);
         // painter.reset = true;
     }
 }
