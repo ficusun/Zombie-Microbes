@@ -22,11 +22,14 @@ fn main() {
         .run();
 }
 
-pub fn setup(mut commands: Commands) {
+pub fn setup(mut windows: Query<&mut Window>, mut commands: Commands) {
     // let mut test = Camera2dBundle::default();
     // test.transform.translation.z = 10.;
     // println!("{}",&test.transform.translation);
     // commands.spawn(Camera2dBundle::default());
-
+    if let Ok(mut window) = windows.get_single_mut() {
+        window.cursor.visible = true;
+    }
+    //mut players_transform: Query<&mut KinematicCharacterController, With<IsPlayer>>,
     // test.send(SpawnCharacter { is_player: true });
 }
