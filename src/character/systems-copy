@@ -1,0 +1,297 @@
+
+use bevy::prelude::*;
+use bevy_rapier2d::prelude::*;
+
+use super::components::*;
+use bevy::sprite::MaterialMesh2dBundle;
+use bevy_vector_shapes::prelude::*;
+use std::f32::consts::PI;
+use bevy_rapier2d::parry::shape::SharedShape;
+use bevy_rapier2d::rapier::prelude::{ColliderBuilder};
+use rand::Rng;
+
+pub fn character_spawner(
+    mut commands: Commands,
+    // rapier_context: Res<RapierContext>,
+    // mut collider_set: ResMut<ColliderSet>,
+    // mut meshes: ResMut<Assets<Mesh>>,
+    // mut materials: ResMut<Assets<ColorMaterial>>,
+) {
+    let pos = Vec3::from((5.,5.,0.));
+    let character_size = 15.;
+    let mut microbes = Vec::new();
+
+    for i in 0..500 {
+        
+        let mut children_entity_commands = commands.spawn(RigidBody::Dynamic);
+        children_entity_commands
+            .insert(Velocity::zero())
+            //.insert(KinematicCharacterController::default())
+            .insert(Collider::ball(5.))
+            //.insert(Sensor)
+            .insert(TransformBundle::from(Transform::from_xyz(i as f32,pos.y,pos.z)))
+            .insert(MicrobeBundle {
+                health: Health(100.),
+                is_microbe: Default::default(),
+                orbit: Orbit(20. + i as f32),
+                draw_stats: DrawStats{
+                    radius: 5.0, color: Color::RED
+                },
+                target: Default::default(),
+            })
+            .insert(Mover{
+                max_speed: 100.0,
+                max_force: 60.0,
+                vel: Vec2::new(0., 0.),
+                acc: Default::default(),
+                stiffness: 1.0,
+                damper: 1.0,
+            });
+        //let _ = collider_set.insert(children_entity_commands.id(), collider);
+        microbes.push(children_entity_commands.id());
+    }
+
+    let mut entity_commands = commands.spawn(RigidBody::KinematicPositionBased);
+    entity_commands
+        //.insert(KinematicCharacterController::default())
+        .insert(Collider::ball(character_size))
+        .insert(TransformBundle::from(Transform::from_xyz(pos.x,pos.y,pos.z)))
+        .insert(Camera2dBundle::default());
+
+    entity_commands.insert(CharacterBundle {
+        health: Health(100.),
+        speed: Speed(1.),
+        microbes: Microbes(microbes.clone()),
+        draw_it: Default::default(),
+        draw_stats: DrawStats{
+            radius: character_size, color: Color::GREEN
+        },
+        combat: CombatState(false),
+        target: Default::default(),
+        energy: Default::default(),
+    });
+
+    entity_commands.insert(IsPlayer);
+
+    // for id in microbes.iter() {
+    //     entity_commands.add_child(*id);
+    // }
+
+    microbes.clear();
+
+    // for i in 0..50 {
+    //
+    //     let mut children_entity_commands = commands.spawn(RigidBody::KinematicPositionBased);
+    //     children_entity_commands
+    //         //.insert(KinematicCharacterController::default())
+    //         .insert(Collider::ball(5.))
+    //         .insert(Sensor)
+    //         .insert(TransformBundle::from(Transform::from_xyz(pos.x,pos.y,pos.z)))
+    //         .insert(MicrobeBundle {
+    //             health: Health(100.),
+    //             speed: Speed(7.),
+    //             is_microbe: Default::default(),
+    //             orbit: Orbit(20. + i as f32),
+    //                draw_stats: DrawStats{
+    //                radius: 5., color: Color::RED
+    //                },
+    //         })
+    //         .insert(Mover{
+    //             max_speed: 3.0,
+    //             max_force: 3.0,
+    //             pos: Default::default(),
+    //             vel: Vec2::new(0., 0.),
+    //             acc: Default::default(),
+    //             stiffness: 3.0,
+    //             damper: 3.0,
+    //             target: Default::default(),
+    //         });
+    //     microbes.push(children_entity_commands.id());
+    // }
+    //
+    // let mut entity_commands = commands.spawn(RigidBody::KinematicPositionBased);
+    // entity_commands
+    //     .insert(Collider::ball(character_size))
+    //     .insert(TransformBundle::from(Transform::from_xyz(pos.x,pos.y,pos.z)));
+    //
+    // entity_commands.insert(PlayerBundle {
+    //     health: Health(100.),
+    //     speed: Speed(1.),
+    //     microbes: Microbes(microbes.clone()),
+    //     draw_it: Default::default(),
+    //      draw_stats: DrawStats{
+    //             radius: character_size, color: Color::GREEN
+    //      },
+    // });
+    //
+    // entity_commands.insert(IsBot);
+    //
+    // for id in microbes.iter() {
+    //     entity_commands.add_child(*id);
+    // }
+    
+    println!("Spawned")
+}
+
+pub fn microbes_spawner(
+    mut commands: Commands,
+    microbe_stats: Res<MicrobeStats>,
+    mut characters_query: Query<&mut Microbes>
+) {
+    let pos = Vec3::from((5.,5.,0.));
+    let mut microbes = Vec::new();
+
+    for i in 0..500 {
+
+        let mut children_entity_commands = commands.spawn(RigidBody::Dynamic);
+        children_entity_commands
+            .insert(Velocity::zero())
+            //.insert(KinematicCharacterController::default())
+            .insert(Collider::ball(5.))
+            //.insert(Sensor)
+            .insert(TransformBundle::from(Transform::from_xyz(i as f32,pos.y,pos.z)))
+            .insert(MicrobeBundle {
+                health: Health(100.),
+                is_microbe: Default::default(),
+                orbit: Orbit(20. + i as f32),
+                draw_stats: DrawStats{
+                    radius: 5.0, color: Color::RED
+                },
+                target: Default::default(),
+            })
+            .insert(Mover{
+                max_speed: 100.0,
+                max_force: 60.0,
+                vel: Vec2::new(0., 0.),
+                acc: Default::default(),
+                stiffness: 1.0,
+                damper: 1.0,
+            });
+        //let _ = collider_set.insert(children_entity_commands.id(), collider);
+        microbes.push(children_entity_commands.id());
+    }
+}
+
+pub fn camera_scale(
+    mut player: Query<(&Microbes, &mut OrthographicProjection), With<IsPlayer>>,
+    microbe_stats: Res<MicrobeStats>,
+) {
+    if let Ok((microbes, mut orthographic_projection)) = player.get_single_mut() {
+        let scale = microbes.0.len() as f32 / microbe_stats.max_count;
+        let min:f32 = 0.8;
+        let max:f32 = 1.8;
+        orthographic_projection.scale = min + scale *(max - min); // microbes as f32 * 0.005;
+    }
+}
+
+pub fn seek_system(
+    mut microbes_query: Query<(&mut Transform, &mut Target, &mut Mover, &mut Velocity), With<Microbe>>,
+    characters_query: Query<(&Microbes,&Target, &CombatState), Without<Microbe>>,
+) {
+    let mut force;
+
+    for (microbes, target, combat_state) in characters_query.iter() {
+        for microbes_entity in microbes.iter() {
+            if let Ok((mut mover_transform, mut mic_target, mut mover_data, mut vel)) = microbes_query.get_mut(*microbes_entity) {
+                if combat_state.0 {
+                    **mic_target = **target;
+
+                    let mut desired = **mic_target - mover_transform.translation.xy();
+                    desired = desired.normalize_or_zero() * mover_data.max_speed;
+                    force = desired - mover_data.vel;
+                    force.clamp_length(0., mover_data.max_force);
+                } else {
+                    let displacement = **mic_target - mover_transform.translation.xy();
+                    force = mover_data.stiffness * displacement - mover_data.damper * mover_data.vel;
+                }
+                mover_data.acc = force;
+                mover_data.vel = mover_data.vel + mover_data.acc;
+                vel.linvel = mover_data.vel;
+                mover_data.acc *= 0.;
+            }
+        }
+    }
+}
+
+pub fn draw_entities(
+    mut painter: ShapePainter,
+    mut draw_data: Query<(&Transform, &DrawStats)>,
+
+) {
+    for (transform, draw_stats) in draw_data.iter() {
+        painter.color = draw_stats.color;
+        painter.transform.translation = transform.translation;
+        painter.circle(draw_stats.radius);
+    }
+}
+
+fn custom_cos_0_1_0(x: f32) -> f32 {
+    0.5 * (1.0 + (x * 2.0 * PI + PI).cos())
+}
+
+pub fn calc_microbes_pos(
+    mut player_query: Query<(&Transform, &Microbes, &CombatState), With<DrawIt>>, // , &Wave
+    mut microbes_query: Query<(&mut Target), (With<Microbe>, Without<DrawIt>)>, // , &Wave // (With<Microbe>, Without<IsPlayer>)
+    time: Res<Time>,
+) {
+    for (&transform, microbes, combat) in player_query.iter() { // (&transform, &wave)
+        // let waveData = wave;
+        if combat.0 {
+            continue
+        }
+
+        let base_radius = 30.;
+        let radius_increment = 20.;
+        let rotation_speed = 10.;
+        let phase_speed = 90.;
+        let frequency = 0.;
+        let amplitude = 0.0;
+        let range = 360.;
+        let strength_factor = 0.;
+        let base_particles_per_orbit = 5.;
+
+        let mut curr_radius = base_radius;
+        let mut prev_radius = base_radius;
+        let mut curr_particles_per_orbit = base_particles_per_orbit as i32;
+        let mut curr_orbit = 1;
+        let mut already_done = 0;
+        for (i, entity_id) in microbes.iter().enumerate() {
+            match microbes_query.get_mut(*entity_id) {
+                Ok((mut mic_target)) => {
+
+                    if i as i32  % curr_particles_per_orbit == 0 && i > 0 {
+                        already_done += curr_particles_per_orbit;
+                        let df = curr_radius;
+                        curr_radius = prev_radius + radius_increment;
+                        prev_radius = df;
+                        curr_particles_per_orbit = (curr_particles_per_orbit as f32 * (curr_radius / prev_radius)).floor() as i32;
+                        curr_orbit += 1;
+                    }
+
+                    let angl_increment = 360. / curr_particles_per_orbit as f32;
+                    let time_elapsed = time.elapsed().as_secs_f32(); // time.delta().as_secs_f32(); // time.elapsed().as_secs_f32();
+                    let particle_in_orbit = i as i32 % curr_particles_per_orbit;
+                    let angle_deg = particle_in_orbit as f32 * angl_increment;
+
+                    let current_angle = (angle_deg + time_elapsed * rotation_speed).to_radians(); //(speed.0 * rng.gen_range(1.0..3.))).to_radians();
+                    let current_phase = (angle_deg + time_elapsed * phase_speed).to_radians();
+
+                    //let t_orbit = (i as i32 / curr_particles_per_orbit) + 1;
+                    let mut r = curr_radius; //base_radius+(radius_increment);// * cur_orbit as f32);
+                    if (angle_deg < range) {
+                        let percent = angle_deg / range;
+                        let strength = custom_cos_0_1_0(strength_factor * percent);
+                        r += strength * (current_phase * frequency).sin() * amplitude * curr_orbit as f32; // + rng.gen_range(0.0..100.)
+                    }
+
+                    let x = current_angle.cos() * r;
+                    let y = current_angle.sin() * r;
+
+                    let mic_pos =  Vec3::from((x, y, 0.)); // transform.translation +
+                    **mic_target = (transform.translation + mic_pos).xy();
+                }
+                Err(e) => (),
+            }
+        }
+    }
+}

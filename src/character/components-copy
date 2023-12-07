@@ -7,19 +7,10 @@ pub struct Health(pub f32);
 pub struct Speed(pub f32);
 
 #[derive(Component, Deref, DerefMut, Default)]
-pub struct CountMicrobes(pub i32);
-
-#[derive(Component, Deref, DerefMut)]
-pub struct ParentEntityID(pub Entity);
-
-// #[derive(Component, Deref, DerefMut, Default)]
-// pub struct Orbit(pub f32);
+pub struct Orbit(pub f32);
 
 #[derive(Component, Deref, DerefMut, Default)]
 pub struct CombatState(pub bool);
-
-#[derive(Component, Deref, DerefMut, Default)]
-pub struct ToSpawnMic(pub bool);
 
 #[derive(Component, Deref, DerefMut, Default)]
 pub struct Energy(pub f32);
@@ -36,8 +27,8 @@ pub struct IsPlayer;
 #[derive(Component, Default)]
 pub struct IsBot;
 
-// #[derive(Component, Default)]
-// pub struct DrawIt;
+#[derive(Component, Default)]
+pub struct DrawIt;
 
 #[derive(Component, Default)]
 pub struct Microbe;
@@ -65,31 +56,26 @@ pub struct MicrobeStats {
     pub max_count: f32,
     pub size: f32,
     pub health: f32,
-    pub spawn_price: f32,
-    pub spawn_radius: f32,
 }
 
 #[derive(Bundle, Default)]
 pub struct CharacterBundle {
     pub health: Health,
     pub speed: Speed,
-    pub to_spawn_mic: ToSpawnMic,
-    // pub microbes: Microbes,
-    // pub draw_it: DrawIt,
+    pub microbes: Microbes,
+    pub draw_it: DrawIt,
     pub draw_stats: DrawStats,
     pub combat: CombatState,
     pub target: Target,
     pub energy: Energy,
-    pub count_microbes: CountMicrobes,
     // pub is_player: IsPlayer,
 }
 
-#[derive(Bundle)]
+#[derive(Bundle, Default)]
 pub struct MicrobeBundle {
     pub health: Health,
     pub is_microbe: Microbe,
-    // pub orbit: Orbit,
+    pub orbit: Orbit,
     pub draw_stats: DrawStats,
     pub target: Target,
-    pub parent_id: ParentEntityID,
 }

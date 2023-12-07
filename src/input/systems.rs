@@ -2,24 +2,18 @@ use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
 
 use crate::character::{components::IsPlayer};
-use crate::character::components::{CombatState, Target};
+use crate::character::components::{CombatState, Target, ToSpawnMic};
 use crate::input::components::Cursor;
 
 pub fn keyboard_input_system(
     mut curr: ResMut<Cursor>,
     keyboard_input: Res<Input<KeyCode>>,
-    mut players_transform: Query<(&mut Transform, &mut CombatState, &mut Target), With<IsPlayer>>,
+    mut players_transform: Query<(&mut Transform, &mut CombatState, &mut Target, &mut ToSpawnMic), With<IsPlayer>>,
     //mut players_transform: Query<&mut KinematicCharacterController, With<IsPlayer>>,
 ) {
     let mut vel = Vec3::default();
-    // println!("{}", vel);
-    // let mut player = players_transform // : Option<Vec2>
-    //     .get_single_mut().unwrap();//.translation.xy();
-    //     //.map_or_else(None, |p| Some(p.translation.xy())); //single_mut()
-    // let mut player = players_transform // : Option<Vec2>
-    //      .get_single_mut().unwrap();//.translation.xy();
-    //     //.map_or_else(None, |p| Some(p.translation.xy())); //single_mut()
-    if let Ok((mut player, mut combat, mut target)) = players_transform.get_single_mut() {
+
+    if let Ok((mut player, mut combat, mut target, mut toSpawn)) = players_transform.get_single_mut() {
         if keyboard_input.pressed(KeyCode::W) {
             vel.y += 1.;
         }
@@ -44,6 +38,12 @@ pub fn keyboard_input_system(
         if keyboard_input.pressed(KeyCode::E) {
             combat.0 = true;
             target.0 = curr.0;
+            //println!("{}", curr.0)
+        }
+
+        if keyboard_input.just_pressed(KeyCode::Q) {
+            toSpawn.0 = true;
+            // target.0 = curr.0;
             //println!("{}", curr.0)
         }
     }
