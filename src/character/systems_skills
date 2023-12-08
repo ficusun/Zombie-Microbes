@@ -42,7 +42,7 @@ pub fn character_spawner(mut commands: Commands) {
         })
         .insert(IsPlayer)
         .with_children(|parent| {
-            parent.spawn(()).insert(InvisiblePlaceholder).insert(Skill::default());
+            parent.spawn(()).insert(InvisiblePlaceholder);
         });
     println!("Spawned")
 }
@@ -150,16 +150,13 @@ pub fn skill_process_time(
 }
 
 pub fn skill_to_children(
-    mut characters: Query<(&mut Skill, &Children), (With<IsCharacter>, Changed<Skill>)>,
-    mut microbes_query: Query<(&mut Skill), (With<Microbe>, Without<IsCharacter>)>,
+    mut characters: Query<(&Skill, &Children), With<IsCharacter>>,
+    mut microbes_query: Query<(&mut Skill), With<Microbe>>,
 ) {
-    for (mut skill, children) in characters.iter_mut() {
+    for (skill, children) in characters.iter_mut() {
         for child in children.iter() {
             if let Ok(mut microbe_skill) = microbes_query.get_mut(*child) {
-                // microbe_skill = skill.clone();
-                if *microbe_skill != *skill {
-                    *microbe_skill = *skill;
-                }
+                microbe_skill = skill;
             }
         }
     }
@@ -169,7 +166,7 @@ pub fn new_seek_system(
     mut microbes_query: Query<
         (
             &Transform,
-            &Skill,
+            &mut Skill,
             &mut Targets,
             &mut Mover,
             &mut Velocity,
@@ -184,11 +181,13 @@ pub fn new_seek_system(
 ) {
     let mut force: Vec2 = Vec2::default();
     let mut rng = rand::thread_rng();
-    for (microbe_transform, skill, mut targets, mut mover, mut vel, parent) in
+    let mut switch_state = false;
+    for (microbe_transform, mut skill, mut targets, mut mover, mut vel, parent) in
         microbes_query.iter_mut()
     {
+        let mut skill = skill.deref_mut();
         match skill {
-            Skill::Rest => {
+            Skill::Rest(ref mut t) => {
                 if let Some(mut microbe_target) = targets.0.first_mut() {
                     if microbe_target.distance(microbe_transform.translation.xy()) <= mover.speed {
                         mover.angle += mover.speed * time.delta().as_secs_f32();
@@ -208,11 +207,13 @@ pub fn new_seek_system(
                     force = mover.stiffness * displacement - mover.damper * mover.vel;
                 }
             }
-            Skill::Patrolling => {}
-            Skill::FollowCursor => {
+            Skill::Patrolling(ref mut t) => {}
+            Skill::FollowCursor(ref mut t) => {
                 if let Some(mut microbe_target) = targets.0.first_mut() {
                     // **mic_target = transform.translation.xy() + **per_target;
-
+                    if t.tick(time.delta()).just_finished() {
+                        switch_state = true;
+                    }
                     *microbe_target = cursor.0;
                     let mut desired = *microbe_target - microbe_transform.translation.xy();
                     desired = desired.normalize_or_zero() * mover.max_speed;
@@ -222,12 +223,19 @@ pub fn new_seek_system(
                     targets.0.push(cursor.0);
                 }
             }
-            Skill::TargetAttack => {
+            Skill::TargetAttack(ref mut t) => {
                 if let Some(microbe_target) = targets.0.first() {
+                    if t.tick(time.delta()).just_finished() {
+                        switch_state = true;
+                    }
                     let displacement = *microbe_target - microbe_transform.translation.xy();
                     force = mover.stiffness * displacement - mover.damper * mover.vel;
                 }
             }
+        }
+
+        if switch_state {
+            Skill::default();
         }
 
         mover.acc = force;

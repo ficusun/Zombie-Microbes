@@ -69,16 +69,16 @@ pub struct SkillsCd {
     pub patrolling: f32,
 }
 
-#[derive(Component, PartialEq, Copy, Clone)] // Default
+#[derive(Component)] // Default
 pub enum Skill {
-    Patrolling,
-    Rest,
-    TargetAttack,
-    FollowCursor,
+    Patrolling(Timer),
+    Rest(Timer),
+    TargetAttack(Timer),
+    FollowCursor(Timer),
 }
 
 impl Default for Skill {
-    fn default() -> Self { Skill::Rest } // (Timer::from_seconds(1., TimerMode::Repeating))
+    fn default() -> Self { Skill::Rest(Timer::from_seconds(1., TimerMode::Repeating)) }
 }
 
 #[derive(Component, Default)]

@@ -1,19 +1,34 @@
 use bevy::prelude::*;
+use bevy::time::TimerMode::Repeating;
 use bevy_rapier2d::prelude::*;
+use std::time::Duration;
 
-use crate::character::{components::IsPlayer};
-use crate::character::components::{CombatState, Target, ToSpawnMic};
+use crate::character::components::IsPlayer;
+use crate::character::components::{CombatState, Skill, SkillCd, SkillsCd, Target, ToSpawnMic};
 use crate::input::components::Cursor;
 
 pub fn keyboard_input_system(
     mut curr: ResMut<Cursor>,
+    skills_cd: Res<SkillsCd>,
     keyboard_input: Res<Input<KeyCode>>,
-    mut players_transform: Query<(&mut Transform, &mut CombatState, &mut Target, &mut ToSpawnMic), With<IsPlayer>>,
+    mut players_transform: Query<
+        (
+            &mut Transform,
+            &mut CombatState,
+            &mut Target,
+            &mut ToSpawnMic,
+            &mut Skill,
+            &mut SkillCd,
+        ),
+        With<IsPlayer>,
+    >,
     //mut players_transform: Query<&mut KinematicCharacterController, With<IsPlayer>>,
 ) {
     let mut vel = Vec3::default();
 
-    if let Ok((mut player, mut combat, mut target, mut toSpawn)) = players_transform.get_single_mut() {
+    if let Ok((mut player, mut combat, mut target, mut toSpawn, mut skill, mut skill_cd)) =
+        players_transform.get_single_mut()
+    {
         if keyboard_input.pressed(KeyCode::W) {
             vel.y += 1.;
         }
@@ -41,10 +56,29 @@ pub fn keyboard_input_system(
             //println!("{}", curr.0)
         }
 
-        if keyboard_input.just_pressed(KeyCode::Q) {
-            toSpawn.0 = true;
+        if keyboard_input.pressed(KeyCode::Key1) {
+            //println!("Click Key1");
+            if skill_cd.0.finished() {
+                println!("Start Key1");
+                skill_cd
+                    .0
+                    .set_duration(Duration::from_secs_f32(skills_cd.follow_cursor));
+                skill_cd.0.reset();
+                //let mut s = Skill::FollowCursor(Timer::from_seconds(skills_cd.follow_cursor, Repeating));
+                *skill =
+                    Skill::FollowCursor; // (Timer::from_seconds(skills_cd.follow_cursor, Repeating))
+                println!("Finished Key1");
+            }
+            // combat.0 = true;
             // target.0 = curr.0;
             //println!("{}", curr.0)
+        }
+
+        if keyboard_input.just_pressed(KeyCode::Q) {
+            println!("press Q: {}", toSpawn.0);
+            toSpawn.0 = true;
+            // target.0 = curr.0;
+            println!("press Q: {}", toSpawn.0);
         }
     }
 
@@ -78,7 +112,6 @@ fn cursor_convert_pos_to_world(window: &Window) -> Option<Vec2> {
     None
 }
 
-
 pub fn mouse_input_system(
     mut curr: ResMut<Cursor>,
     windows: Query<&Window>,
@@ -88,9 +121,14 @@ pub fn mouse_input_system(
         // if let Some(t) = cursor_convert_pos_to_world(window) {
         //     curr.0 = t;
         // }
-        let c = window.cursor_position().map_or(Vec2::new(0., 0.), |cur| cur);
+        let c = window
+            .cursor_position()
+            .map_or(Vec2::new(0., 0.), |cur| cur);
 
-        let window_size = Vec2::new(window.physical_width() as f32, window.physical_height() as f32);
+        let window_size = Vec2::new(
+            window.physical_width() as f32,
+            window.physical_height() as f32,
+        );
         let ndc_to_world = player.0.compute_matrix() * player.1.projection_matrix().inverse();
         let ndc = Vec2::new(c.x / window_size.x, 1.0 - c.y / window_size.y) * 2.0 - Vec2::ONE;
         // let ndc = (window.cursor_position().map_or(Vec2::new(0., 0.), |cur| cur) / window_size) * 2.0 - Vec2::ONE;

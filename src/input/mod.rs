@@ -2,7 +2,7 @@ use bevy::prelude::*;
 //use crate::input::systems::keyboard_input_system;
 
 mod systems;
-mod components;
+pub mod components;
 
 use components::*;
 use systems::*;
