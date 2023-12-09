@@ -48,30 +48,38 @@ pub fn keyboard_input_system(
 
         player.translation += vel.normalize_or_zero();
 
-        combat.0 = false;
-
-        if keyboard_input.pressed(KeyCode::E) {
-            combat.0 = true;
-            target.0 = curr.0;
-            //println!("{}", curr.0)
+        if !skill_cd.0.finished() {
+            return;
         }
 
+        // combat.0 = false;
+        //
+        // if keyboard_input.pressed(KeyCode::E) {
+        //     combat.0 = true;
+        //     target.0 = curr.0;
+        //     //println!("{}", curr.0)
+        // }
+
         if keyboard_input.pressed(KeyCode::Key1) {
-            //println!("Click Key1");
-            if skill_cd.0.finished() {
-                println!("Start Key1");
+
+                println!("FollowCursor start");
                 skill_cd
                     .0
                     .set_duration(Duration::from_secs_f32(skills_cd.follow_cursor));
                 skill_cd.0.reset();
-                //let mut s = Skill::FollowCursor(Timer::from_seconds(skills_cd.follow_cursor, Repeating));
                 *skill =
-                    Skill::FollowCursor; // (Timer::from_seconds(skills_cd.follow_cursor, Repeating))
-                println!("Finished Key1");
-            }
-            // combat.0 = true;
-            // target.0 = curr.0;
-            //println!("{}", curr.0)
+                    Skill::FollowCursor(Some(curr.0)); // (Timer::from_seconds(skills_cd.follow_cursor, Repeating))
+        }
+
+        if keyboard_input.pressed(KeyCode::Key2) {
+
+                println!("TargetAttack start");
+                skill_cd
+                    .0
+                    .set_duration(Duration::from_secs_f32(skills_cd.target_attack));
+                skill_cd.0.reset();
+                *skill =
+                    Skill::TargetAttack(Some(curr.0), 1.0); // (Timer::from_seconds(skills_cd.follow_cursor, Repeating))
         }
 
         if keyboard_input.just_pressed(KeyCode::Q) {

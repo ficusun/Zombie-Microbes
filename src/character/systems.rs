@@ -2,14 +2,10 @@ use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
 
 use super::components::*;
-use bevy::sprite::MaterialMesh2dBundle;
-use bevy_rapier2d::parry::shape::SharedShape;
-use bevy_rapier2d::rapier::prelude::ColliderBuilder;
 use crate::input::components::Cursor;
 use bevy_vector_shapes::prelude::*;
 use rand::Rng;
 use std::f32::consts::PI;
-use std::ops::DerefMut;
 
 pub fn character_spawner(mut commands: Commands) {
     let pos = Vec3::from((5., 5., 0.));
@@ -38,6 +34,7 @@ pub fn character_spawner(mut commands: Commands) {
             count_microbes: Default::default(),
             skill_cd: Default::default(),
             skill: Default::default(),
+            is_bot: Default::default(),
             character: Default::default(),
         })
         .insert(IsPlayer)
@@ -50,11 +47,11 @@ pub fn character_spawner(mut commands: Commands) {
 pub fn microbes_spawner(
     mut commands: Commands,
     microbe_stats: Res<MicrobeStats>,
-    mut characters_query: Query<(Entity, &mut ToSpawnMic, &mut Energy, &Children)>, // , With<IsCharacter>
+    mut characters_query: Query<(Entity, &mut ToSpawnMic, &mut Energy, &Children, &IsBot)>, // , With<IsCharacter>
 ) {
 
     let mut rng = rand::thread_rng();
-    for (entity, mut to_spawn_min, mut energy, children) in characters_query.iter_mut() {
+    for (entity, mut to_spawn_min, mut energy, children, is_bot) in characters_query.iter_mut() {
         if to_spawn_min.0 && energy.0 > microbe_stats.spawn_price {
             while energy.0 > microbe_stats.spawn_price {
                 if children.len() >= microbe_stats.max_count as usize {
@@ -81,19 +78,20 @@ pub fn microbes_spawner(
                             radius: microbe_stats.size,
                             color: Color::RED,
                         },
-                        // target: Default::default(),
+                        target: Default::default(),
                         // skill_target: Default::default(),
                         // rest_target: Default::default(),
-                        parent_id: ParentEntityID(entity),
-                        targets: Default::default(),
+                        // parent_id: ParentEntityID(entity),
+                        // targets: Default::default(),
+                        is_bot: IsBot(is_bot.0),
                         skill: Default::default(),
                     })
                     .insert(Mover {
-                        max_speed: 120.0,
+                        max_speed: 200.0,
                         max_force: 100.0,
                         vel: Vec2::new(0., 0.),
                         acc: Default::default(),
-                        stiffness: 1.0,
+                        stiffness: 2.0,
                         damper: 1.0,
                         angle: rng.gen_range(0.0..=2. * PI), // random(0, 2 * PI)
                         radius: rng.gen_range(
@@ -101,6 +99,7 @@ pub fn microbes_spawner(
                         ),
                         speed: microbe_stats.speed,
                     });
+
                 children_entity_commands.set_parent(entity);
                 // if let Some(mut entityCom) = commands.get_entity(entity) {
                 //     entityCom.add_child(children_entity_commands.id());
@@ -156,7 +155,6 @@ pub fn skill_to_children(
     for (mut skill, children) in characters.iter_mut() {
         for child in children.iter() {
             if let Ok(mut microbe_skill) = microbes_query.get_mut(*child) {
-                // microbe_skill = skill.clone();
                 if *microbe_skill != *skill {
                     *microbe_skill = *skill;
                 }
@@ -170,28 +168,30 @@ pub fn new_seek_system(
         (
             &Transform,
             &Skill,
-            &mut Targets,
+            // &mut Targets,
+            &mut Target,
             &mut Mover,
             &mut Velocity,
-            &ParentEntityID,
+            &IsBot,
         ),
         With<Microbe>,
     >,
     // characters_query: Query<(&Target, &CombatState, &Transform), Without<Microbe>>,
     time: Res<Time>,
-    cursor: ResMut<Cursor>,
+    cursor: Res<Cursor>,
     microbe_stats: Res<MicrobeStats>,
 ) {
     let mut force: Vec2 = Vec2::default();
     let mut rng = rand::thread_rng();
-    for (microbe_transform, skill, mut targets, mut mover, mut vel, parent) in
+    for (microbe_transform, skill, mut microbe_target, mut mover, mut vel, is_bot) in
         microbes_query.iter_mut()
     {
         match skill {
             Skill::Rest => {
-                if let Some(mut microbe_target) = targets.0.first_mut() {
-                    if microbe_target.distance(microbe_transform.translation.xy()) <= mover.speed {
-                        mover.angle += mover.speed * time.delta().as_secs_f32();
+                // if let Some(mut microbe_target) = targets.0.first_mut() {
+
+                    if microbe_target.0.distance(microbe_transform.translation.xy()) <= mover.speed {
+                        mover.angle +=  mover.speed * time.delta().as_secs_f32(); // PI/6.;//
                         microbe_target.x = mover.radius * mover.angle.cos();
                         microbe_target.y = mover.radius * mover.angle.sin();
                         let pulsation_speed = 3.0;
@@ -203,106 +203,45 @@ pub fn new_seek_system(
                             + (microbe_stats.spawn_radius_max - microbe_stats.spawn_radius_min)
                                 * 0.5
                                 * (1.0 + pulsation_phase.sin());
+                    } else {
+                        let displacement = microbe_target.0 - microbe_transform.translation.xy();
+                        force = mover.stiffness * displacement - mover.damper * mover.vel;
                     }
-                    let displacement = *microbe_target - microbe_transform.translation.xy();
-                    force = mover.stiffness * displacement - mover.damper * mover.vel;
-                }
+                //}
             }
-            Skill::Patrolling => {}
-            Skill::FollowCursor => {
-                if let Some(mut microbe_target) = targets.0.first_mut() {
+            Skill::Patrolling(tar1, tar2) => {}
+            Skill::FollowCursor(tar1) => {
+                //if let Some(mut microbe_target) = tar1 {
                     // **mic_target = transform.translation.xy() + **per_target;
 
-                    *microbe_target = cursor.0;
-                    let mut desired = *microbe_target - microbe_transform.translation.xy();
+                    if is_bot.0 {
+                        if let Some(new_target) = tar1 {
+                            microbe_target.0 = *new_target;
+                        }
+                    } else {
+                        microbe_target.0 = cursor.0;
+                    }
+
+                    let mut desired = microbe_target.0 - microbe_transform.translation.xy();
                     desired = desired.normalize_or_zero() * mover.max_speed;
                     force = desired - mover.vel;
                     force.clamp_length(0., mover.max_force);
-                } else {
-                    targets.0.push(cursor.0);
-                }
+                //}
             }
-            Skill::TargetAttack => {
-                if let Some(microbe_target) = targets.0.first() {
+            Skill::TargetAttack(tar1, damper) => {
+                if let Some(microbe_target) = tar1 {
                     let displacement = *microbe_target - microbe_transform.translation.xy();
-                    force = mover.stiffness * displacement - mover.damper * mover.vel;
+                    force = mover.stiffness * displacement - *damper * mover.vel;
                 }
             }
         }
 
         mover.acc = force;
-        mover.vel = mover.vel + mover.acc;
+        mover.vel = mover.vel + mover.acc * time.delta_seconds();
         vel.linvel = mover.vel;
         mover.acc *= 0.;
     }
 }
-
-// pub fn seek_system(
-//     mut microbes_query: Query<(&Transform, &mut SkillTarget, &mut RestTarget, &mut Mover, &mut Velocity, &ParentEntityID), With<Microbe>>,
-//     characters_query: Query<(&Target, &CombatState, &Transform), Without<Microbe>>,
-// ) {
-//     let mut force;
-//
-//     for (mic_transform, mut skill_target, mut rest_target, mut mover, mut vel, parent) in microbes_query.iter_mut() {
-//         match (skill_target.0, rest_target.0){
-//             (None, Some(rest_targ)) => {
-//                 let displacement = **mic_target - mic_transform.translation.xy();
-//                 force = mover.stiffness * displacement - mover.damper * mover.vel;
-//             },
-//             (Some(skill_tar), None) => {
-//                 **mic_target = transform.translation.xy() + **per_target;
-//
-//                 let mut desired = **mic_target - mic_transform.translation.xy();
-//                 desired = desired.normalize_or_zero() * mover.max_speed;
-//                 force = desired - mover.vel;
-//                 force.clamp_length(0., mover.max_force);
-//             }
-//         }
-//
-//         match characters_query.get(parent.0) {
-//             Ok((mut per_target, combat, transform)) => {
-//                 if combat.0 {
-//                     **mic_target = transform.translation.xy() + **per_target;
-//
-//                     let mut desired = **mic_target - mic_transform.translation.xy();
-//                     desired = desired.normalize_or_zero() * mover.max_speed;
-//                     force = desired - mover.vel;
-//                     force.clamp_length(0., mover.max_force);
-//                 } else {
-//                     let displacement = **mic_target - mic_transform.translation.xy();
-//                     force = mover.stiffness * displacement - mover.damper * mover.vel;
-//                 }
-//                 mover.acc = force;
-//                 mover.vel = mover.vel + mover.acc;
-//                 vel.linvel = mover.vel;
-//                 mover.acc *= 0.;
-//             },
-//             Err(e) => {}
-//         }
-//     }
-//
-//     // for (microbes, target, combat_state) in characters_query.iter() {
-//     //     for microbes_entity in microbes.iter() {
-//     //         if let Ok((mut mover_transform, mut mic_target, mut mover_data, mut vel)) = microbes_query.get_mut(*microbes_entity) {
-//     //             if combat_state.0 {
-//     //                 **mic_target = **target;
-//     //
-//     //                 let mut desired = **mic_target - mover_transform.translation.xy();
-//     //                 desired = desired.normalize_or_zero() * mover_data.max_speed;
-//     //                 force = desired - mover_data.vel;
-//     //                 force.clamp_length(0., mover_data.max_force);
-//     //             } else {
-//     //                 let displacement = **mic_target - mover_transform.translation.xy();
-//     //                 force = mover_data.stiffness * displacement - mover_data.damper * mover_data.vel;
-//     //             }
-//     //             mover_data.acc = force;
-//     //             mover_data.vel = mover_data.vel + mover_data.acc;
-//     //             vel.linvel = mover_data.vel;
-//     //             mover_data.acc *= 0.;
-//     //         }
-//     //     }
-//     // }
-// }
 
 pub fn draw_entities(
     mut painter: ShapePainter,

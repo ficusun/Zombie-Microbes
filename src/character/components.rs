@@ -43,8 +43,8 @@ pub struct IsPlayer;
 #[derive(Component, Default)]
 pub struct IsCharacter;
 
-#[derive(Component, Default)]
-pub struct IsBot;
+// #[derive(Component, Default)]
+// pub struct IsBot;
 
 // #[derive(Component, Default)]
 // pub struct DrawIt;
@@ -71,15 +71,18 @@ pub struct SkillsCd {
 
 #[derive(Component, PartialEq, Copy, Clone)] // Default
 pub enum Skill {
-    Patrolling,
+    Patrolling(Option<Vec2>, Option<Vec2>),
     Rest,
-    TargetAttack,
-    FollowCursor,
+    TargetAttack(Option<Vec2>, f32),
+    FollowCursor(Option<Vec2>),
 }
 
 impl Default for Skill {
     fn default() -> Self { Skill::Rest } // (Timer::from_seconds(1., TimerMode::Repeating))
 }
+
+#[derive(Component, Default)]
+pub struct IsBot(pub bool);
 
 #[derive(Component, Default)]
 pub struct Mover {
@@ -133,6 +136,7 @@ pub struct CharacterBundle {
     pub count_microbes: CountMicrobes,
     pub skill_cd: SkillCd,
     pub skill: Skill,
+    pub is_bot: IsBot,
     pub character: IsCharacter,
     // pub is_player: IsPlayer,
 }
@@ -143,10 +147,12 @@ pub struct MicrobeBundle {
     pub is_microbe: Microbe,
     // pub orbit: Orbit,
     pub draw_stats: DrawStats,
-    pub targets: Targets,
+    pub target: Target,
+    // pub targets: Targets,
     // pub target: Target,
     // pub skill_target: SkillTarget,
     // pub rest_target: RestTarget,
-    pub parent_id: ParentEntityID,
+    // pub parent_id: ParentEntityID,
+    pub is_bot: IsBot,
     pub skill: Skill,
 }
