@@ -92,6 +92,7 @@ pub struct Mover {
     pub acc: Vec2,
     pub stiffness: f32,
     pub damper: f32,
+    pub rotation_speed: f32,
     // new
     pub angle: f32,
     pub radius: f32,

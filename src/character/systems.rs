@@ -30,7 +30,7 @@ pub fn character_spawner(mut commands: Commands) {
             },
             combat: CombatState(false),
             target: Default::default(),
-            energy: Energy(250.),
+            energy: Energy(1000.),
             count_microbes: Default::default(),
             skill_cd: Default::default(),
             skill: Default::default(),
@@ -39,7 +39,10 @@ pub fn character_spawner(mut commands: Commands) {
         })
         .insert(IsPlayer)
         .with_children(|parent| {
-            parent.spawn(()).insert(InvisiblePlaceholder).insert(Skill::default());
+            parent
+                .spawn(())
+                .insert(InvisiblePlaceholder)
+                .insert(Skill::default());
         });
     println!("Spawned")
 }
@@ -49,14 +52,13 @@ pub fn microbes_spawner(
     microbe_stats: Res<MicrobeStats>,
     mut characters_query: Query<(Entity, &mut ToSpawnMic, &mut Energy, &Children, &IsBot)>, // , With<IsCharacter>
 ) {
-
     let mut rng = rand::thread_rng();
     for (entity, mut to_spawn_min, mut energy, children, is_bot) in characters_query.iter_mut() {
         if to_spawn_min.0 && energy.0 > microbe_stats.spawn_price {
             while energy.0 > microbe_stats.spawn_price {
                 if children.len() >= microbe_stats.max_count as usize {
                     to_spawn_min.0 = false;
-                    break
+                    break;
                 }
                 energy.0 -= microbe_stats.spawn_price;
 
@@ -93,6 +95,7 @@ pub fn microbes_spawner(
                         acc: Default::default(),
                         stiffness: 2.0,
                         damper: 1.0,
+                        rotation_speed: rng.gen_range(0.5..=2.),
                         angle: rng.gen_range(0.0..=2. * PI), // random(0, 2 * PI)
                         radius: rng.gen_range(
                             microbe_stats.spawn_radius_min..=microbe_stats.spawn_radius_max,
@@ -163,6 +166,10 @@ pub fn skill_to_children(
     }
 }
 
+fn scale_value(value: f32, start1: f32, stop1: f32, start2: f32, stop2: f32) -> f32 {
+    start2 + (stop2 - start2) * ((value - start1) / (stop1 - start1))
+}
+
 pub fn new_seek_system(
     mut microbes_query: Query<
         (
@@ -180,6 +187,7 @@ pub fn new_seek_system(
     time: Res<Time>,
     cursor: Res<Cursor>,
     microbe_stats: Res<MicrobeStats>,
+    // mut painter: ShapePainter,
 ) {
     let mut force: Vec2 = Vec2::default();
     let mut rng = rand::thread_rng();
@@ -188,45 +196,44 @@ pub fn new_seek_system(
     {
         match skill {
             Skill::Rest => {
-                // if let Some(mut microbe_target) = targets.0.first_mut() {
+                let mut cur_angle = microbe_transform
+                    .translation
+                    .y
+                    .atan2(microbe_transform.translation.x);
+                mover.radius = (mover.radius + rng.gen_range(-3..=3) as f32).clamp(
+                    microbe_stats.spawn_radius_min,
+                    microbe_stats.spawn_radius_max,
+                ); // 150.;//
 
-                    if microbe_target.0.distance(microbe_transform.translation.xy()) <= mover.speed {
-                        mover.angle +=  mover.speed * time.delta().as_secs_f32(); // PI/6.;//
-                        microbe_target.x = mover.radius * mover.angle.cos();
-                        microbe_target.y = mover.radius * mover.angle.sin();
-                        let pulsation_speed = 3.0;
+                let speed_factor = scale_value(
+                    mover.radius,
+                    microbe_stats.spawn_radius_min,
+                    microbe_stats.spawn_radius_max,
+                    1.,
+                    0.1,
+                );
 
-                        let pulsation_phase = time.elapsed().as_secs_f32()
-                            * pulsation_speed
-                            * rng.gen_range(0.1..10.0);
-                        mover.radius = microbe_stats.spawn_radius_min
-                            + (microbe_stats.spawn_radius_max - microbe_stats.spawn_radius_min)
-                                * 0.5
-                                * (1.0 + pulsation_phase.sin());
-                    } else {
-                        let displacement = microbe_target.0 - microbe_transform.translation.xy();
-                        force = mover.stiffness * displacement - mover.damper * mover.vel;
-                    }
-                //}
+                mover.angle =
+                    (cur_angle + PI / 12. * (mover.rotation_speed * speed_factor)) % (PI * 2.); // mover.rotation_speed rng.gen_range(0.0..PI/12.) * time.delta_seconds()
+                microbe_target.x = mover.radius * mover.angle.cos(); // mover.radius mover.angle.cos()
+                microbe_target.y = mover.radius * mover.angle.sin(); // (mover.speed * time.delta().as_secs_f32())
+                let displacement = microbe_target.0 - microbe_transform.translation.xy();
+                force = mover.stiffness * displacement - mover.damper * mover.vel;
             }
             Skill::Patrolling(tar1, tar2) => {}
             Skill::FollowCursor(tar1) => {
-                //if let Some(mut microbe_target) = tar1 {
-                    // **mic_target = transform.translation.xy() + **per_target;
-
-                    if is_bot.0 {
-                        if let Some(new_target) = tar1 {
-                            microbe_target.0 = *new_target;
-                        }
-                    } else {
-                        microbe_target.0 = cursor.0;
+                if is_bot.0 {
+                    if let Some(new_target) = tar1 {
+                        microbe_target.0 = *new_target;
                     }
+                } else {
+                    microbe_target.0 = cursor.0;
+                }
 
-                    let mut desired = microbe_target.0 - microbe_transform.translation.xy();
-                    desired = desired.normalize_or_zero() * mover.max_speed;
-                    force = desired - mover.vel;
-                    force.clamp_length(0., mover.max_force);
-                //}
+                let mut desired = microbe_target.0 - microbe_transform.translation.xy();
+                desired = desired.normalize_or_zero() * mover.max_speed;
+                force = desired - mover.vel;
+                force.clamp_length(0., mover.max_force);
             }
             Skill::TargetAttack(tar1, damper) => {
                 if let Some(microbe_target) = tar1 {
@@ -258,172 +265,172 @@ fn custom_cos_0_1_0(x: f32) -> f32 {
     0.5 * (1.0 + (x * 2.0 * PI + PI).cos())
 }
 
-pub fn calc_microbes_pos(
-    characters_query: Query<(Entity, &Children, &Transform, &CombatState), Without<Microbe>>, // , &Wave &CountMicrobes
-    mut microbes_query: Query<(&mut Target), With<Microbe>>, // , &Wave // (With<Microbe>, Without<IsPlayer>)
-    time: Res<Time>,
-) {
-    let base_radius = 30.;
-    let radius_increment = 20.;
-    let rotation_speed = 10.;
-    let phase_speed = 90.;
-    let frequency = 0.;
-    let amplitude = 0.0;
-    let range = 360.;
-    let strength_factor = 0.;
-    let base_particles_per_orbit = 5.;
-    let mut curr_radius = base_radius;
-    let mut prev_radius = base_radius;
-    let mut curr_particles_per_orbit = base_particles_per_orbit as i32;
-    let mut curr_orbit = 1;
-    let mut already_done = 0;
+// pub fn calc_microbes_pos(
+//     characters_query: Query<(Entity, &Children, &Transform, &CombatState), Without<Microbe>>, // , &Wave &CountMicrobes
+//     mut microbes_query: Query<(&mut Target), With<Microbe>>, // , &Wave // (With<Microbe>, Without<IsPlayer>)
+//     time: Res<Time>,
+// ) {
+//     let base_radius = 30.;
+//     let radius_increment = 20.;
+//     let rotation_speed = 10.;
+//     let phase_speed = 90.;
+//     let frequency = 0.;
+//     let amplitude = 0.0;
+//     let range = 360.;
+//     let strength_factor = 0.;
+//     let base_particles_per_orbit = 5.;
+//     let mut curr_radius = base_radius;
+//     let mut prev_radius = base_radius;
+//     let mut curr_particles_per_orbit = base_particles_per_orbit as i32;
+//     let mut curr_orbit = 1;
+//     let mut already_done = 0;
+//
+//     for (entity, children, transform, combat) in characters_query.iter() {
+//         if combat.0 {
+//             continue;
+//         }
+//
+//         for (i, microbe) in children.iter().enumerate() {
+//             if let Ok(mut target) = microbes_query.get_mut(*microbe) {
+//                 if i as i32 % curr_particles_per_orbit == 0 && i > 0 {
+//                     already_done += curr_particles_per_orbit;
+//                     let df = curr_radius;
+//                     curr_radius = prev_radius + radius_increment;
+//                     prev_radius = df;
+//                     curr_particles_per_orbit = (curr_particles_per_orbit as f32
+//                         * (curr_radius / prev_radius))
+//                         .floor() as i32;
+//                     curr_orbit += 1;
+//                 }
+//
+//                 let angl_increment = 360. / curr_particles_per_orbit as f32;
+//                 let time_elapsed = time.elapsed().as_secs_f32(); // time.delta().as_secs_f32(); // time.elapsed().as_secs_f32();
+//                 let particle_in_orbit = i as i32 % curr_particles_per_orbit;
+//                 let angle_deg = particle_in_orbit as f32 * angl_increment;
+//
+//                 let current_angle = (angle_deg + time_elapsed * rotation_speed).to_radians(); //(speed.0 * rng.gen_range(1.0..3.))).to_radians();
+//                 let current_phase = (angle_deg + time_elapsed * phase_speed).to_radians();
+//
+//                 //let t_orbit = (i as i32 / curr_particles_per_orbit) + 1;
+//                 let mut r = curr_radius; //base_radius+(radius_increment);// * cur_orbit as f32);
+//                 if (angle_deg < range) {
+//                     let percent = angle_deg / range;
+//                     let strength = custom_cos_0_1_0(strength_factor * percent);
+//                     r += strength
+//                         * (current_phase * frequency).sin()
+//                         * amplitude
+//                         * curr_orbit as f32; // + rng.gen_range(0.0..100.)
+//                 }
+//
+//                 let x = current_angle.cos() * r;
+//                 let y = current_angle.sin() * r;
+//
+//                 let mic_pos = Vec2::from((x, y)); // transform.translation + , 0.
+//                 target.0 = mic_pos; // (transform.translation + ).xy()
+//             }
+//         }
+//     }
 
-    for (entity, children, transform, combat) in characters_query.iter() {
-        if combat.0 {
-            continue;
-        }
+// for (mut target, parent_entity) in microbes_query.iter_mut() {
+//     if let Ok((&parent_transform, &parent_combat)) = characters_query.get(parent_entity) {
+//         if *parent_combat {
+//             continue
+//         }
+//
+//         if i as i32  % curr_particles_per_orbit == 0 && i > 0 {
+//             already_done += curr_particles_per_orbit;
+//             let df = curr_radius;
+//             curr_radius = prev_radius + radius_increment;
+//             prev_radius = df;
+//             curr_particles_per_orbit = (curr_particles_per_orbit as f32 * (curr_radius / prev_radius)).floor() as i32;
+//             curr_orbit += 1;
+//         }
+//
+//         let angl_increment = 360. / curr_particles_per_orbit as f32;
+//         let time_elapsed = time.elapsed().as_secs_f32(); // time.delta().as_secs_f32(); // time.elapsed().as_secs_f32();
+//         let particle_in_orbit = i as i32 % curr_particles_per_orbit;
+//         let angle_deg = particle_in_orbit as f32 * angl_increment;
+//
+//         let current_angle = (angle_deg + time_elapsed * rotation_speed).to_radians(); //(speed.0 * rng.gen_range(1.0..3.))).to_radians();
+//         let current_phase = (angle_deg + time_elapsed * phase_speed).to_radians();
+//
+//         //let t_orbit = (i as i32 / curr_particles_per_orbit) + 1;
+//         let mut r = curr_radius; //base_radius+(radius_increment);// * cur_orbit as f32);
+//         if (angle_deg < range) {
+//             let percent = angle_deg / range;
+//             let strength = custom_cos_0_1_0(strength_factor * percent);
+//             r += strength * (current_phase * frequency).sin() * amplitude * curr_orbit as f32; // + rng.gen_range(0.0..100.)
+//         }
+//
+//         let x = current_angle.cos() * r;
+//         let y = current_angle.sin() * r;
+//
+//         let mic_pos =  Vec3::from((x, y, 0.)); // transform.translation +
+//         **mic_target = (transform.translation + mic_pos).xy();
+//     }
+// }
 
-        for (i, microbe) in children.iter().enumerate() {
-            if let Ok(mut target) = microbes_query.get_mut(*microbe) {
-                if i as i32 % curr_particles_per_orbit == 0 && i > 0 {
-                    already_done += curr_particles_per_orbit;
-                    let df = curr_radius;
-                    curr_radius = prev_radius + radius_increment;
-                    prev_radius = df;
-                    curr_particles_per_orbit = (curr_particles_per_orbit as f32
-                        * (curr_radius / prev_radius))
-                        .floor() as i32;
-                    curr_orbit += 1;
-                }
-
-                let angl_increment = 360. / curr_particles_per_orbit as f32;
-                let time_elapsed = time.elapsed().as_secs_f32(); // time.delta().as_secs_f32(); // time.elapsed().as_secs_f32();
-                let particle_in_orbit = i as i32 % curr_particles_per_orbit;
-                let angle_deg = particle_in_orbit as f32 * angl_increment;
-
-                let current_angle = (angle_deg + time_elapsed * rotation_speed).to_radians(); //(speed.0 * rng.gen_range(1.0..3.))).to_radians();
-                let current_phase = (angle_deg + time_elapsed * phase_speed).to_radians();
-
-                //let t_orbit = (i as i32 / curr_particles_per_orbit) + 1;
-                let mut r = curr_radius; //base_radius+(radius_increment);// * cur_orbit as f32);
-                if (angle_deg < range) {
-                    let percent = angle_deg / range;
-                    let strength = custom_cos_0_1_0(strength_factor * percent);
-                    r += strength
-                        * (current_phase * frequency).sin()
-                        * amplitude
-                        * curr_orbit as f32; // + rng.gen_range(0.0..100.)
-                }
-
-                let x = current_angle.cos() * r;
-                let y = current_angle.sin() * r;
-
-                let mic_pos = Vec2::from((x, y)); // transform.translation + , 0.
-                target.0 = mic_pos; // (transform.translation + ).xy()
-            }
-        }
-    }
-
-    // for (mut target, parent_entity) in microbes_query.iter_mut() {
-    //     if let Ok((&parent_transform, &parent_combat)) = characters_query.get(parent_entity) {
-    //         if *parent_combat {
-    //             continue
-    //         }
-    //
-    //         if i as i32  % curr_particles_per_orbit == 0 && i > 0 {
-    //             already_done += curr_particles_per_orbit;
-    //             let df = curr_radius;
-    //             curr_radius = prev_radius + radius_increment;
-    //             prev_radius = df;
-    //             curr_particles_per_orbit = (curr_particles_per_orbit as f32 * (curr_radius / prev_radius)).floor() as i32;
-    //             curr_orbit += 1;
-    //         }
-    //
-    //         let angl_increment = 360. / curr_particles_per_orbit as f32;
-    //         let time_elapsed = time.elapsed().as_secs_f32(); // time.delta().as_secs_f32(); // time.elapsed().as_secs_f32();
-    //         let particle_in_orbit = i as i32 % curr_particles_per_orbit;
-    //         let angle_deg = particle_in_orbit as f32 * angl_increment;
-    //
-    //         let current_angle = (angle_deg + time_elapsed * rotation_speed).to_radians(); //(speed.0 * rng.gen_range(1.0..3.))).to_radians();
-    //         let current_phase = (angle_deg + time_elapsed * phase_speed).to_radians();
-    //
-    //         //let t_orbit = (i as i32 / curr_particles_per_orbit) + 1;
-    //         let mut r = curr_radius; //base_radius+(radius_increment);// * cur_orbit as f32);
-    //         if (angle_deg < range) {
-    //             let percent = angle_deg / range;
-    //             let strength = custom_cos_0_1_0(strength_factor * percent);
-    //             r += strength * (current_phase * frequency).sin() * amplitude * curr_orbit as f32; // + rng.gen_range(0.0..100.)
-    //         }
-    //
-    //         let x = current_angle.cos() * r;
-    //         let y = current_angle.sin() * r;
-    //
-    //         let mic_pos =  Vec3::from((x, y, 0.)); // transform.translation +
-    //         **mic_target = (transform.translation + mic_pos).xy();
-    //     }
-    // }
-
-    //     for (&transform, microbes, combat) in character_query.iter() { // (&transform, &wave)
-    //     // let waveData = wave;
-    //     if combat.0 {
-    //         continue
-    //     }
-    //
-    //     let base_radius = 30.;
-    //     let radius_increment = 20.;
-    //     let rotation_speed = 10.;
-    //     let phase_speed = 90.;
-    //     let frequency = 0.;
-    //     let amplitude = 0.0;
-    //     let range = 360.;
-    //     let strength_factor = 0.;
-    //     let base_particles_per_orbit = 5.;
-    //
-    //     let mut curr_radius = base_radius;
-    //     let mut prev_radius = base_radius;
-    //     let mut curr_particles_per_orbit = base_particles_per_orbit as i32;
-    //     let mut curr_orbit = 1;
-    //     let mut already_done = 0;
-    //     for (i, entity_id) in microbes.iter().enumerate() {
-    //         match microbes_query.get_mut(*entity_id) {
-    //             Ok((mut mic_target)) => {
-    //
-    //                 if i as i32  % curr_particles_per_orbit == 0 && i > 0 {
-    //                     already_done += curr_particles_per_orbit;
-    //                     let df = curr_radius;
-    //                     curr_radius = prev_radius + radius_increment;
-    //                     prev_radius = df;
-    //                     curr_particles_per_orbit = (curr_particles_per_orbit as f32 * (curr_radius / prev_radius)).floor() as i32;
-    //                     curr_orbit += 1;
-    //                 }
-    //
-    //                 let angl_increment = 360. / curr_particles_per_orbit as f32;
-    //                 let time_elapsed = time.elapsed().as_secs_f32(); // time.delta().as_secs_f32(); // time.elapsed().as_secs_f32();
-    //                 let particle_in_orbit = i as i32 % curr_particles_per_orbit;
-    //                 let angle_deg = particle_in_orbit as f32 * angl_increment;
-    //
-    //                 let current_angle = (angle_deg + time_elapsed * rotation_speed).to_radians(); //(speed.0 * rng.gen_range(1.0..3.))).to_radians();
-    //                 let current_phase = (angle_deg + time_elapsed * phase_speed).to_radians();
-    //
-    //                 //let t_orbit = (i as i32 / curr_particles_per_orbit) + 1;
-    //                 let mut r = curr_radius; //base_radius+(radius_increment);// * cur_orbit as f32);
-    //                 if (angle_deg < range) {
-    //                     let percent = angle_deg / range;
-    //                     let strength = custom_cos_0_1_0(strength_factor * percent);
-    //                     r += strength * (current_phase * frequency).sin() * amplitude * curr_orbit as f32; // + rng.gen_range(0.0..100.)
-    //                 }
-    //
-    //                 let x = current_angle.cos() * r;
-    //                 let y = current_angle.sin() * r;
-    //
-    //                 let mic_pos =  Vec3::from((x, y, 0.)); // transform.translation +
-    //                 **mic_target = (transform.translation + mic_pos).xy();
-    //             }
-    //             Err(e) => (),
-    //         }
-    //     }
-    // }
-}
+//     for (&transform, microbes, combat) in character_query.iter() { // (&transform, &wave)
+//     // let waveData = wave;
+//     if combat.0 {
+//         continue
+//     }
+//
+//     let base_radius = 30.;
+//     let radius_increment = 20.;
+//     let rotation_speed = 10.;
+//     let phase_speed = 90.;
+//     let frequency = 0.;
+//     let amplitude = 0.0;
+//     let range = 360.;
+//     let strength_factor = 0.;
+//     let base_particles_per_orbit = 5.;
+//
+//     let mut curr_radius = base_radius;
+//     let mut prev_radius = base_radius;
+//     let mut curr_particles_per_orbit = base_particles_per_orbit as i32;
+//     let mut curr_orbit = 1;
+//     let mut already_done = 0;
+//     for (i, entity_id) in microbes.iter().enumerate() {
+//         match microbes_query.get_mut(*entity_id) {
+//             Ok((mut mic_target)) => {
+//
+//                 if i as i32  % curr_particles_per_orbit == 0 && i > 0 {
+//                     already_done += curr_particles_per_orbit;
+//                     let df = curr_radius;
+//                     curr_radius = prev_radius + radius_increment;
+//                     prev_radius = df;
+//                     curr_particles_per_orbit = (curr_particles_per_orbit as f32 * (curr_radius / prev_radius)).floor() as i32;
+//                     curr_orbit += 1;
+//                 }
+//
+//                 let angl_increment = 360. / curr_particles_per_orbit as f32;
+//                 let time_elapsed = time.elapsed().as_secs_f32(); // time.delta().as_secs_f32(); // time.elapsed().as_secs_f32();
+//                 let particle_in_orbit = i as i32 % curr_particles_per_orbit;
+//                 let angle_deg = particle_in_orbit as f32 * angl_increment;
+//
+//                 let current_angle = (angle_deg + time_elapsed * rotation_speed).to_radians(); //(speed.0 * rng.gen_range(1.0..3.))).to_radians();
+//                 let current_phase = (angle_deg + time_elapsed * phase_speed).to_radians();
+//
+//                 //let t_orbit = (i as i32 / curr_particles_per_orbit) + 1;
+//                 let mut r = curr_radius; //base_radius+(radius_increment);// * cur_orbit as f32);
+//                 if (angle_deg < range) {
+//                     let percent = angle_deg / range;
+//                     let strength = custom_cos_0_1_0(strength_factor * percent);
+//                     r += strength * (current_phase * frequency).sin() * amplitude * curr_orbit as f32; // + rng.gen_range(0.0..100.)
+//                 }
+//
+//                 let x = current_angle.cos() * r;
+//                 let y = current_angle.sin() * r;
+//
+//                 let mic_pos =  Vec3::from((x, y, 0.)); // transform.translation +
+//                 **mic_target = (transform.translation + mic_pos).xy();
+//             }
+//             Err(e) => (),
+//         }
+//     }
+// }
+// }
 
 //
 // pub fn calc_microbes_pos(

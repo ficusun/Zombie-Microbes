@@ -15,7 +15,7 @@ impl Plugin for CharacterPlugin {
         app.add_systems(Startup, character_spawner)
             // .add_systems(Update, first_microbe_spawner)
             .add_systems(Update, microbes_spawner)
-            .add_systems(Update, calc_microbes_pos)
+            // .add_systems(Update, calc_microbes_pos)
             .add_systems(Update, energy_regeneration)
             .add_systems(Update, skill_process_time)
             .add_systems(Update, skill_to_children)
@@ -29,8 +29,8 @@ impl Plugin for CharacterPlugin {
                 size: 5.0,
                 health: 50.0,
                 spawn_price: 20.0,
-                speed: 150.0,
-                spawn_radius_min: 20.0,
+                speed: 40.0,
+                spawn_radius_min: 30.0,
                 spawn_radius_max: 500.0 }) // 815
             .insert_resource(CharacterEnergyStats{
                 max_count: 1000.0,
