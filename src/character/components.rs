@@ -184,3 +184,10 @@ pub struct MicrobeBundle {
     pub is_bot: IsBot,
     pub skill: Skill,
 }
+
+
+#[derive(Component)]
+struct FpsText;
+
+#[derive(Component)]
+struct ColorText;

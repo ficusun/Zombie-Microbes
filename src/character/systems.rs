@@ -3,16 +3,18 @@ use bevy_rapier2d::prelude::*;
 
 use super::components::*;
 use crate::input::components::Cursor;
+use bevy_rapier2d::rapier::prelude::ColliderHandle;
 use bevy_vector_shapes::prelude::*;
 use rand::Rng;
 use std::f32::consts::PI;
+use bevy::diagnostic::DiagnosticsStore;
 // use bevy_rapier2d::rapier::geometry::InteractionGroups;
 // use bevy_rapier2d::rapier::prelude::InteractionGroups;
 
 pub fn character_spawner(mut commands: Commands, mut ccg: ResMut<CharacterCollisionGroups>) {
     //mccg: ResMut<MineCollisionGroups>
     let pos = Vec3::from((150., 150., 0.));
-    let character_size = 15.;
+    let character_size = 1.5;
 
     let parent_group = Group::from_bits_retain(bit_map_group_take(&mut ccg.0));
     let child_group = Group::from_bits_retain(bit_map_group_take(&mut ccg.0));
@@ -23,12 +25,12 @@ pub fn character_spawner(mut commands: Commands, mut ccg: ResMut<CharacterCollis
         .insert(Collider::ball(character_size))
         // .insert(Sensor)
         //.insert(CollisionGroups::new(fg, fg))
+        .insert(Camera2dBundle::default())
         .insert(TransformBundle::from(Transform::from_xyz(
             pos.x, pos.y, pos.z,
         )))
-        .insert(Camera2dBundle::default())
         .insert(CharacterBundle {
-            health: Health(100.),
+            health: Health(3000.),
             speed: Speed(1.),
             // draw_it: Default::default(),
             to_spawn_mic: Default::default(),
@@ -83,7 +85,7 @@ pub fn character_spawner(mut commands: Commands, mut ccg: ResMut<CharacterCollis
         )))
         // .insert(Camera2dBundle::default())
         .insert(CharacterBundle {
-            health: Health(100.),
+            health: Health(3000.),
             speed: Speed(1.),
             // draw_it: Default::default(),
             to_spawn_mic: ToSpawnMic(true),
@@ -134,7 +136,8 @@ pub fn microbes_spawner(
     )>, // , With<IsCharacter>
 ) {
     let mut rng = rand::thread_rng();
-    for (entity, mut to_spawn_min, mut energy, children, is_bot, ccg, child_color) in characters_query.iter_mut()
+    for (entity, mut to_spawn_min, mut energy, children, is_bot, ccg, child_color) in
+        characters_query.iter_mut()
     {
         if to_spawn_min.0 && energy.0 > microbe_stats.spawn_price {
             while energy.0 > microbe_stats.spawn_price {
@@ -158,11 +161,12 @@ pub fn microbes_spawner(
                 let mut children_entity_commands = commands.spawn(RigidBody::Dynamic);
                 children_entity_commands
                     .insert(Velocity::zero())
-                    .insert(Collider::ball(5.))
+                    .insert(Collider::ball(microbe_stats.size))
                     .insert(CollisionGroups::new(ccg.child_id, not_interact))
+                    .insert(ActiveEvents::COLLISION_EVENTS)
                     .insert(TransformBundle::from(Transform::from_xyz(x, y, 0.)))
                     .insert(MicrobeBundle {
-                        health: Health(100.),
+                        health: if is_bot.0 { Health(100.) } else { Health(50.) },
                         is_microbe: Default::default(),
                         // orbit: Orbit(20. + i as f32),
                         draw_stats: DrawStats {
@@ -210,8 +214,8 @@ pub fn camera_scale(
 ) {
     if let Ok((microbes, mut orthographic_projection)) = player.get_single_mut() {
         let scale = (microbes.len() as i32 / microbe_stats.max_count) as f32;
-        let min: f32 = 0.8;
-        let max: f32 = 1.8;
+        let min: f32 = 0.05;
+        let max: f32 = 1.05;
         orthographic_projection.scale = min + scale * (max - min); // microbes as f32 * 0.005;
     }
 }
@@ -243,10 +247,10 @@ pub fn skill_process_time(
 pub fn skill_to_children(
     mut characters: Query<(&Skill, &Children, &Transform, &mut CursorTargets), With<IsCharacter>>, //   &IsBot, is_bot, , Changed<Skill>
     mut microbes_query: Query<(&mut Skill), (With<Microbe>, Without<IsCharacter>)>,
-    cursor: Res<Cursor>,
+    //cursor: Res<Cursor>,
     microbe_stats: Res<MicrobeStats>,
 ) {
-    for (skill, children, parent_transform,  mut cursor_targets) in characters.iter_mut() {
+    for (skill, children, parent_transform, mut cursor_targets) in characters.iter_mut() {
         let mut skill_to_child: Skill;
         match *skill {
             Skill::Rest(_) => {
@@ -260,37 +264,26 @@ pub fn skill_to_children(
                 // println!("curr rad {}", cur_radius);
                 skill_to_child = Skill::Rest(cur_radius);
             }
-            Skill::TargetAttack(_,_) => {
+            Skill::TargetAttack(_, _) => {
                 let new_tar = match cursor_targets.0 {
-                    (Some(target1), None) => {
-                        Some(target1 - parent_transform.translation.xy())
-                    },
-                    (None, Some(target2)) => {
-                        Some(target2 - parent_transform.translation.xy())
-                    },
-                    (Some(target1), Some(_)) => {
-                        Some(target1 - parent_transform.translation.xy())
-                    },
-                    (None, None) => None
+                    (Some(target1), None) => Some(target1 - parent_transform.translation.xy()),
+                    (None, Some(target2)) => Some(target2 - parent_transform.translation.xy()),
+                    (Some(target1), Some(_)) => Some(target1 - parent_transform.translation.xy()),
+                    (None, None) => None,
                 };
 
                 let damper = 1.0;
                 skill_to_child = Skill::TargetAttack(new_tar, damper);
             }
             Skill::FollowCursor(_) => {
-
                 // if !is_bot.0 {
                 //     cursor_targets.0.0 = Some(cursor.0 - parent_transform.translation.xy());
                 // }
 
                 let new_tar = match cursor_targets.0 {
-                    (Some(target1), None) => {
-                        Some(target1 - parent_transform.translation.xy())
-                    },
-                    (Some(target1), Some(_)) => {
-                        Some(target1 - parent_transform.translation.xy())
-                    },
-                    _ => None
+                    (Some(target1), None) => Some(target1 - parent_transform.translation.xy()),
+                    (Some(target1), Some(_)) => Some(target1 - parent_transform.translation.xy()),
+                    _ => None,
                 };
 
                 skill_to_child = Skill::FollowCursor(new_tar);
@@ -298,18 +291,22 @@ pub fn skill_to_children(
             Skill::Patrolling(_, _) => {
                 let (new_tar1, new_tar2) = match cursor_targets.0 {
                     (Some(target1), None) => {
-                        (Some(target1 - parent_transform.translation.xy()),
-                        Some(Vec2::default())) // parent pos = Vec2::default() (0.,0.,)
-                    },
+                        (
+                            Some(target1 - parent_transform.translation.xy()),
+                            Some(Vec2::default()),
+                        ) // parent pos = Vec2::default() (0.,0.,)
+                    }
                     (None, Some(target2)) => {
-                        (Some(Vec2::default()), // parent pos = Vec2::default() (0.,0.,)
-                        Some(target2 - parent_transform.translation.xy()))
-                    },
-                    (Some(target1), Some(target2)) => {
-                        (Some(target1 - parent_transform.translation.xy()),
-                        Some(target2 - parent_transform.translation.xy()))
-                    },
-                    (None, None) => (None, None)
+                        (
+                            Some(Vec2::default()), // parent pos = Vec2::default() (0.,0.,)
+                            Some(target2 - parent_transform.translation.xy()),
+                        )
+                    }
+                    (Some(target1), Some(target2)) => (
+                        Some(target1 - parent_transform.translation.xy()),
+                        Some(target2 - parent_transform.translation.xy()),
+                    ),
+                    (None, None) => (None, None),
                 };
 
                 skill_to_child = Skill::Patrolling(new_tar1, new_tar2);
@@ -318,12 +315,12 @@ pub fn skill_to_children(
         for child in children.iter() {
             if let Ok(mut microbe_skill) = microbes_query.get_mut(*child) {
                 match *skill {
-                    Skill::TargetAttack(_,_) => {
+                    Skill::TargetAttack(_, _) => {
                         if *microbe_skill != *skill {
                             *microbe_skill = skill_to_child;
                         }
                     }
-                    _=> *microbe_skill = skill_to_child
+                    _ => *microbe_skill = skill_to_child,
                 }
             }
         }
@@ -368,9 +365,10 @@ pub fn new_seek_system(
                     .translation
                     .y
                     .atan2(microbe_transform.translation.x);
-                mover.radius = (mover.radius + rng.gen_range(-3..=3) as f32)
-                    .clamp(microbe_stats.spawn_radius_min, microbe_stats.spawn_radius_max,
-                    ); // 150.;// *max_radius
+                mover.radius = (mover.radius + rng.gen_range(-3..=3) as f32).clamp(
+                    microbe_stats.spawn_radius_min,
+                    microbe_stats.spawn_radius_max,
+                ); // 150.;// *max_radius
 
                 let speed_factor = scale_value(
                     mover.radius,
@@ -381,9 +379,6 @@ pub fn new_seek_system(
                     0.1,
                 );
 
-                // println!("cur mover.radius {}", mover.radius);
-                // println!("cur speed_factor {}", speed_factor);
-
                 mover.angle =
                     (cur_angle + PI / 12. * (mover.rotation_speed * speed_factor)) % (PI * 2.); // mover.rotation_speed rng.gen_range(0.0..PI/12.) * time.delta_seconds()
                 microbe_target.x = mover.radius * mover.angle.cos(); // mover.radius mover.angle.cos()
@@ -393,16 +388,21 @@ pub fn new_seek_system(
             }
             Skill::Patrolling(tar1, tar2) => {
                 if let (Some(target1), Some(target2)) = (tar1, tar2) {
-
                     if microbe_target.0 != *target1 && microbe_target.0 != *target2 {
                         microbe_target.0 = *target1
                     }
 
-                    if (microbe_target.0 == *target1) && microbe_transform.translation.xy().distance(*target1) < max_dist_to_points {
-                            microbe_target.0 = *target2
+                    if (microbe_target.0 == *target1)
+                        && microbe_transform.translation.xy().distance(*target1)
+                            < max_dist_to_points
+                    {
+                        microbe_target.0 = *target2
                     }
 
-                    if (microbe_target.0 == *target2) && microbe_transform.translation.xy().distance(*target2) < max_dist_to_points {
+                    if (microbe_target.0 == *target2)
+                        && microbe_transform.translation.xy().distance(*target2)
+                            < max_dist_to_points
+                    {
                         microbe_target.0 = *target1
                     }
 
@@ -449,6 +449,73 @@ pub fn draw_entities(
         painter.circle(draw_stats.radius);
     }
 }
+
+pub fn display_events(
+    mut collision_events: EventReader<CollisionEvent>,
+    mut collider_query: Query<(&mut Health)>, // Entity Some(entity, mut health, collider_handel)
+    mut cmd: Commands, // mut contact_force_events: EventReader<ContactForceEvent>,
+) {
+    for collision_event in collision_events.read() {
+        match collision_event {
+            CollisionEvent::Started(collider1, collider2, _) => {
+                let health_entity_one = if let Ok(hel) = collider_query.get(*collider1) {
+                    hel.0
+                } else {
+                    0.
+                };
+
+                let health_entity_two = if let Ok(hel) = collider_query.get(*collider2) {
+                    hel.0
+                } else {
+                    0.
+                };
+
+                if let Ok(mut my_health) = collider_query.get_mut(*collider1) {
+                    my_health.0 = my_health.0 - health_entity_two;
+                    if my_health.0 <= 0. {
+                        cmd.entity(*collider1).despawn_recursive()
+                    }
+                }
+
+                if let Ok(mut my_health) = collider_query.get_mut(*collider2) {
+                    my_health.0 = my_health.0 - health_entity_one;
+                    if my_health.0 <= 0. {
+                        cmd.entity(*collider2).despawn_recursive()
+                    }
+                }
+            }
+            _ => (),
+        }
+        println!("Received collision event: {:?}", collision_event);
+    }
+
+    // for contact_force_event in contact_force_events.iter() {
+    //     println!("Received contact force event: {:?}", contact_force_event);
+    // }
+}
+
+// pub fn display_events(
+//     mut collision_events: EventReader<CollisionEvent>,
+//     mut collider_query: Query<(&mut Health)>, // Entity Some(entity, mut health, collider_handel)
+// ) {
+//     for collision_event in collision_events.read() {
+//         match collision_event {
+//             CollisionEvent::Started(collider1, collider2,_) => {
+//                 let mut ent1 = collider_query.get_mut(*collider1);
+//                 let mut ent2 = collider_query.get_mut(*collider2);
+//                 match (ent1, ent2) {
+//                     (Ok((mut entity_one_health)), Ok((mut entity_two_health))) => {
+//                         entity_one_health.0 = entity_one_health.0 - entity_two_health.0;
+//                         entity_two_health.0 = entity_two_health.0 - entity_one_health.0;
+//                     }
+//                     _=>()
+//                 }
+//             },
+//             _=>()
+//         }
+//         println!("Received collision event: {:?}", collision_event);
+//     }
+// }
 
 pub fn draw_entities_points(
     mut painter: ShapePainter,
@@ -500,4 +567,19 @@ fn bit_map_group_take(store: &mut u32) -> u32 {
 
 fn bit_map_group_back(store: &mut u32, group: u32) {
     *store = *store | group
+}
+
+
+fn text_update_system(
+    diagnostics: Res<DiagnosticsStore>,
+    mut query: Query<&mut Text, With<FpsText>>,
+) {
+    for mut text in &mut query {
+        if let Some(fps) = diagnostics.get(FrameTimeDiagnosticsPlugin::FPS) {
+            if let Some(value) = fps.smoothed() {
+                // Update the value of the second section
+                text.sections[1].value = format!("{value:.2}");
+            }
+        }
+    }
 }

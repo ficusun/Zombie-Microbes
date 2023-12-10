@@ -26,15 +26,16 @@ impl Plugin for CharacterPlugin {
             .add_systems(Update, draw_entities)
             .add_systems(Update, camera_scale)
             .add_systems(Update, draw_entities_points)
+            .add_systems(Update, display_events)
             .insert_resource(MicrobeStats{
                 min_count: 0,
                 max_count: 3000,
-                size: 5.0,
+                size: 0.5,
                 health: 50.0,
                 spawn_price: 20.0,
                 speed: 40.0,
-                spawn_radius_min: 30.0,
-                spawn_radius_max: 815.0 }) // 815
+                spawn_radius_min: 3.0,
+                spawn_radius_max: 81.0 }) // 815
             .insert_resource(CharacterEnergyStats{
                 max_count: 1000.0,
                 regeneration_rate_per_sec: 100.0,
