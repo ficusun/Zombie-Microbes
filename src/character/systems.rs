@@ -6,15 +6,42 @@ use crate::input::components::Cursor;
 use bevy_vector_shapes::prelude::*;
 use rand::Rng;
 use std::f32::consts::PI;
+// use bevy_rapier2d::rapier::geometry::InteractionGroups;
+// use bevy_rapier2d::rapier::prelude::InteractionGroups;
 
-pub fn character_spawner(mut commands: Commands) {
-    let pos = Vec3::from((5., 5., 0.));
+
+
+pub fn character_spawner(mut commands: Commands) { //mccg: ResMut<MineCollisionGroups>
+    let pos = Vec3::from((150., 150., 0.));
     let character_size = 15.;
 
+    // println!("{:#?}, {:#?}",mccg.child_id, mccg.parent_id);
+    // mccg.parent_id. -= ;
+    //println!("{:#?}, {:#?}, {}",Group::GROUP_1, u32::MAX ,u32::MAX & !1u32);
+    // let mut tt = u32::MAX;
+    // println!("{:#032b}", tt);
+    // tt = tt & !1u32;
+    // println!("{:#032b}", u32::MAX & !1u32);
+    // tt = 2u32 & !1u32;
+    // println!("{:#032b}", tt);
+    // tt = tt & !4u32;
+    // println!("{:#032b}", tt);
+    // tt = tt & !8u32;
+    // println!("{:#032b}", tt);
+    // tt = tt & !16u32;
+    // println!("{:#032b}", tt);
+
+    // println!("{:#?}, {:#?}",Group::GROUP_3, Group::GROUP_4);
+    // println!("{:#?}, {:#?}",Group::GROUP_5, Group::GROUP_6);
+    // println!("{:#?}, {:#?}",Group::GROUP_7, Group::GROUP_8);
+
+    // player
     commands
         .spawn(RigidBody::KinematicPositionBased)
         //.insert(KinematicCharacterController::default())
         .insert(Collider::ball(character_size))
+        // .insert(Sensor)
+        //.insert(CollisionGroups::new(fg, fg))
         .insert(TransformBundle::from(Transform::from_xyz(
             pos.x, pos.y, pos.z,
         )))
@@ -30,13 +57,17 @@ pub fn character_spawner(mut commands: Commands) {
             },
             combat: CombatState(false),
             target: Default::default(),
-            energy: Energy(1000.),
+            energy: Energy(1.),
             count_microbes: Default::default(),
             skill_cd: Default::default(),
             skill: Default::default(),
             is_bot: Default::default(),
             character: Default::default(),
+            character_collision_group: CharacterCollisionGroup{
+                parent_id: Group::GROUP_1, child_id: Group::GROUP_2
+            },
         })
+        .insert(CollisionGroups::new(Group::GROUP_1, Group::ALL & !Group::GROUP_2))
         .insert(IsPlayer)
         .with_children(|parent| {
             parent
@@ -44,33 +75,80 @@ pub fn character_spawner(mut commands: Commands) {
                 .insert(InvisiblePlaceholder)
                 .insert(Skill::default());
         });
-    println!("Spawned")
+
+    // test bot
+    commands
+        .spawn(RigidBody::KinematicPositionBased)
+        //.insert(KinematicCharacterController::default())
+        .insert(Collider::ball(character_size))
+        //.insert(Sensor)
+        //.insert(CollisionGroups::new(fg, fg))
+        .insert(TransformBundle::from(Transform::from_xyz(
+            pos.x-150., pos.y-150., pos.z,
+        )))
+        // .insert(Camera2dBundle::default())
+        .insert(CharacterBundle {
+            health: Health(100.),
+            speed: Speed(1.),
+            // draw_it: Default::default(),
+            to_spawn_mic: ToSpawnMic(true),
+            draw_stats: DrawStats {
+                radius: character_size,
+                color: Color::GREEN,
+            },
+            combat: CombatState(false),
+            target: Default::default(),
+            energy: Energy(500.),
+            count_microbes: Default::default(),
+            skill_cd: Default::default(),
+            skill: Default::default(),
+            is_bot: IsBot(true),
+            character: Default::default(),
+            character_collision_group: CharacterCollisionGroup{
+                parent_id: Group::GROUP_3, child_id: Group::GROUP_4
+            },
+        })
+        .insert(CollisionGroups::new(Group::GROUP_3, Group::ALL & !Group::GROUP_4))
+        //.insert(IsPlayer)
+        .with_children(|parent| {
+            parent
+                .spawn(())
+                .insert(InvisiblePlaceholder)
+                .insert(Skill::default());
+        });
+    println!("Spawned");
 }
 
 pub fn microbes_spawner(
     mut commands: Commands,
     microbe_stats: Res<MicrobeStats>,
-    mut characters_query: Query<(Entity, &mut ToSpawnMic, &mut Energy, &Children, &IsBot)>, // , With<IsCharacter>
+    mut characters_query: Query<(Entity, &mut ToSpawnMic, &mut Energy, &Children, &IsBot, &CharacterCollisionGroup)>, // , With<IsCharacter>
 ) {
     let mut rng = rand::thread_rng();
-    for (entity, mut to_spawn_min, mut energy, children, is_bot) in characters_query.iter_mut() {
+    for (entity, mut to_spawn_min, mut energy, children, is_bot, ccg) in characters_query.iter_mut() {
         if to_spawn_min.0 && energy.0 > microbe_stats.spawn_price {
             while energy.0 > microbe_stats.spawn_price {
                 if children.len() >= microbe_stats.max_count as usize {
                     to_spawn_min.0 = false;
+                    println!("Too much children");
                     break;
                 }
                 energy.0 -= microbe_stats.spawn_price;
+                
+                // test groups
+                let mut not_interact = Group::ALL & !ccg.parent_id;
+                not_interact = not_interact & !ccg.child_id;
 
                 let x =
                     rng.gen_range(-microbe_stats.spawn_radius_max..microbe_stats.spawn_radius_max); // transform.translation.x +
                 let y =
                     rng.gen_range(-microbe_stats.spawn_radius_max..microbe_stats.spawn_radius_max); // transform.translation.y +
-
+                // u32 && self and parent = all other;
                 let mut children_entity_commands = commands.spawn(RigidBody::Dynamic);
                 children_entity_commands
                     .insert(Velocity::zero())
                     .insert(Collider::ball(5.))
+                    .insert(CollisionGroups::new(ccg.child_id, not_interact))
                     .insert(TransformBundle::from(Transform::from_xyz(x, y, 0.)))
                     .insert(MicrobeBundle {
                         health: Health(100.),
@@ -152,20 +230,81 @@ pub fn skill_process_time(
 }
 
 pub fn skill_to_children(
-    mut characters: Query<(&mut Skill, &Children), (With<IsCharacter>, Changed<Skill>)>,
+    mut characters: Query<(&Skill, &Children, &Transform, &IsBot), With<IsCharacter>>, // , Changed<Skill>
     mut microbes_query: Query<(&mut Skill), (With<Microbe>, Without<IsCharacter>)>,
+    cursor: Res<Cursor>,
+    microbe_stats: Res<MicrobeStats>,
 ) {
-    for (mut skill, children) in characters.iter_mut() {
+    for (skill, children, parent_transform, is_bot) in characters.iter_mut() {
+        let mut skill_to_child: Skill;
+        match *skill {
+            Skill::Rest(_) => {
+                let cur_radius = scale_value(
+                    children.len() as f32,
+                    microbe_stats.min_count as f32 + 1.,
+                    microbe_stats.max_count as f32,
+                    microbe_stats.spawn_radius_min + 150.,
+                    microbe_stats.spawn_radius_max
+                );
+                // println!("curr rad {}", cur_radius);
+                skill_to_child = Skill::Rest(cur_radius);
+            }
+            Skill::TargetAttack(target, sp) => {
+                let new_tar = if let Some(tar) = target {
+                    Some(tar - parent_transform.translation.xy())
+                } else {
+                    None
+                };
+                skill_to_child = Skill::TargetAttack(new_tar, sp);
+            }
+            Skill::FollowCursor(target1) => {
+                let new_tar = match (target1, is_bot.0) {
+                    (Some(tar), true) => {
+                        Some(tar - parent_transform.translation.xy())
+                    },
+                    (_, false) => {
+                        Some(cursor.0 - parent_transform.translation.xy())
+                    }
+                    _=> None
+                };
+
+                skill_to_child = Skill::FollowCursor(new_tar);
+            }
+            Skill::Patrolling(tar1, tar2) => {
+                let (new_tar1, new_tar2) = if let (Some(target1), Some(target2)) = (tar1, tar2) {
+                    (
+                        Some(target1 - parent_transform.translation.xy()),
+                        Some(target2 - parent_transform.translation.xy()),
+                    )
+                } else {
+                    (None, None)
+                };
+                skill_to_child = Skill::Patrolling(new_tar1, new_tar2);
+            }
+        }
         for child in children.iter() {
             if let Ok(mut microbe_skill) = microbes_query.get_mut(*child) {
-                if *microbe_skill != *skill {
-                    *microbe_skill = *skill;
+                match *skill {
+                    Skill::FollowCursor(_) => {
+                        *microbe_skill = skill_to_child;
+                    },
+                    Skill::Rest(_) => {
+                        *microbe_skill = skill_to_child;
+                    }
+                    _ => {
+                        if *microbe_skill != *skill {
+                            *microbe_skill = skill_to_child;
+                        }
+                    }
                 }
             }
         }
     }
 }
 
+// value that scale factor
+// start1 and stop1 - its first part min max range
+// start2 and stop2 - its second part min max the range scale
 fn scale_value(value: f32, start1: f32, stop1: f32, start2: f32, stop2: f32) -> f32 {
     start2 + (stop2 - start2) * ((value - start1) / (stop1 - start1))
 }
@@ -179,39 +318,42 @@ pub fn new_seek_system(
             &mut Target,
             &mut Mover,
             &mut Velocity,
-            &IsBot,
+            // &IsBot,
         ),
         With<Microbe>,
     >,
     // characters_query: Query<(&Target, &CombatState, &Transform), Without<Microbe>>,
     time: Res<Time>,
-    cursor: Res<Cursor>,
+    // cursor: Res<Cursor>,
     microbe_stats: Res<MicrobeStats>,
     // mut painter: ShapePainter,
 ) {
     let mut force: Vec2 = Vec2::default();
     let mut rng = rand::thread_rng();
-    for (microbe_transform, skill, mut microbe_target, mut mover, mut vel, is_bot) in
+    for (microbe_transform, skill, mut microbe_target, mut mover, mut vel) in //  is_bot
         microbes_query.iter_mut()
     {
         match skill {
-            Skill::Rest => {
-                let mut cur_angle = microbe_transform
+            Skill::Rest(max_radius) => {
+                let cur_angle = microbe_transform
                     .translation
                     .y
                     .atan2(microbe_transform.translation.x);
                 mover.radius = (mover.radius + rng.gen_range(-3..=3) as f32).clamp(
                     microbe_stats.spawn_radius_min,
-                    microbe_stats.spawn_radius_max,
+                    *max_radius,
                 ); // 150.;//
 
                 let speed_factor = scale_value(
                     mover.radius,
                     microbe_stats.spawn_radius_min,
-                    microbe_stats.spawn_radius_max,
+                    *max_radius,
                     1.,
                     0.1,
                 );
+
+                // println!("cur mover.radius {}", mover.radius);
+                // println!("cur speed_factor {}", speed_factor);
 
                 mover.angle =
                     (cur_angle + PI / 12. * (mover.rotation_speed * speed_factor)) % (PI * 2.); // mover.rotation_speed rng.gen_range(0.0..PI/12.) * time.delta_seconds()
@@ -222,12 +364,9 @@ pub fn new_seek_system(
             }
             Skill::Patrolling(tar1, tar2) => {}
             Skill::FollowCursor(tar1) => {
-                if is_bot.0 {
-                    if let Some(new_target) = tar1 {
-                        microbe_target.0 = *new_target;
-                    }
-                } else {
-                    microbe_target.0 = cursor.0;
+
+                if let Some(new_target) = (tar1) {
+                    microbe_target.0 = *new_target;
                 }
 
                 let mut desired = microbe_target.0 - microbe_transform.translation.xy();

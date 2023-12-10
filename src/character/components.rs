@@ -1,5 +1,6 @@
 use std::time;
 use bevy::prelude::*;
+use bevy_rapier2d::prelude::Group;
 
 #[derive(Component, Deref, DerefMut, Default)]
 pub struct Health(pub f32);
@@ -58,6 +59,16 @@ pub struct DrawStats {
     pub radius: f32,
     pub color: Color
 }
+#[derive(Component, Default)]
+pub struct CharacterCollisionGroup {
+    pub parent_id: Group,
+    pub child_id: Group
+}
+#[derive(Resource, Default)]
+pub struct MineCollisionGroups {
+    pub parent_id: Group,
+    pub child_id: Group
+}
 
 #[derive(Component, Default)]
 pub struct SkillCd(pub Timer);
@@ -72,13 +83,13 @@ pub struct SkillsCd {
 #[derive(Component, PartialEq, Copy, Clone)] // Default
 pub enum Skill {
     Patrolling(Option<Vec2>, Option<Vec2>),
-    Rest,
+    Rest(f32),
     TargetAttack(Option<Vec2>, f32),
     FollowCursor(Option<Vec2>),
 }
 
 impl Default for Skill {
-    fn default() -> Self { Skill::Rest } // (Timer::from_seconds(1., TimerMode::Repeating))
+    fn default() -> Self { Skill::Rest(30.) } // (Timer::from_seconds(1., TimerMode::Repeating))
 }
 
 #[derive(Component, Default)]
@@ -139,6 +150,7 @@ pub struct CharacterBundle {
     pub skill: Skill,
     pub is_bot: IsBot,
     pub character: IsCharacter,
+    pub character_collision_group: CharacterCollisionGroup,
     // pub is_player: IsPlayer,
 }
 

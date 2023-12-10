@@ -26,7 +26,7 @@ pub fn keyboard_input_system(
 ) {
     let mut vel = Vec3::default();
 
-    if let Ok((mut player, mut combat, mut target, mut toSpawn, mut skill, mut skill_cd)) =
+    if let Ok((mut player_transform, mut combat, mut target, mut toSpawn, mut skill, mut skill_cd)) =
         players_transform.get_single_mut()
     {
         if keyboard_input.pressed(KeyCode::W) {
@@ -46,7 +46,7 @@ pub fn keyboard_input_system(
             //println!("DAAAAAA")
         }
 
-        player.translation += vel.normalize_or_zero();
+        player_transform.translation += vel.normalize_or_zero();
 
         if !skill_cd.0.finished() {
             return;
@@ -68,7 +68,7 @@ pub fn keyboard_input_system(
                     .set_duration(Duration::from_secs_f32(skills_cd.follow_cursor));
                 skill_cd.0.reset();
                 *skill =
-                    Skill::FollowCursor(Some(curr.0)); // (Timer::from_seconds(skills_cd.follow_cursor, Repeating))
+                    Skill::FollowCursor(Some(curr.0)); //  Some(player_transform.translation.xy()) (Timer::from_seconds(skills_cd.follow_cursor, Repeating))
         }
 
         if keyboard_input.pressed(KeyCode::Key2) {
