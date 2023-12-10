@@ -29,6 +29,9 @@ pub struct Energy(pub f32);
 #[derive(Component, Deref, DerefMut, Default)]
 pub struct Target(pub Vec2);
 
+#[derive(Component, Deref, DerefMut, Default)]
+pub struct CursorTargets(pub (Option<Vec2>, Option<Vec2>));
+
 // #[derive(Component, Deref, DerefMut, Default)]
 // pub struct SkillTarget(pub Option<Vec2>);
 
@@ -95,6 +98,13 @@ impl Default for Skill {
 #[derive(Component, Default)]
 pub struct IsBot(pub bool);
 
+#[derive(Resource)]
+pub struct CharacterCollisionGroups(pub u32);
+
+impl Default for CharacterCollisionGroups {
+    fn default() -> Self { Self(u32::MAX) } // (Timer::from_seconds(1., TimerMode::Repeating))
+}
+
 #[derive(Component, Default)]
 pub struct Mover {
     pub max_speed: f32,
@@ -151,6 +161,7 @@ pub struct CharacterBundle {
     pub is_bot: IsBot,
     pub character: IsCharacter,
     pub character_collision_group: CharacterCollisionGroup,
+    pub cursor_targets: CursorTargets,
     // pub is_player: IsPlayer,
 }
 

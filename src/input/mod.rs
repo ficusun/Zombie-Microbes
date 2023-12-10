@@ -14,6 +14,7 @@ impl Plugin for InputPlugin {
         app
             .insert_resource(Cursor::default())
             .add_systems(Update, keyboard_input_system)
-            .add_systems(Update, mouse_input_system);
+            .add_systems(Update, mouse_input_system)
+            .add_systems(Update, mouse_click_system);
     }
 }

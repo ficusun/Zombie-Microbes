@@ -13,7 +13,7 @@ pub struct CharacterPlugin;
 impl Plugin for CharacterPlugin {
     fn build(&self, app: &mut App) {
         app
-            //.insert_resource(MineCollisionGroups::default())
+            .insert_resource(CharacterCollisionGroups::default())
             .add_systems(Startup, character_spawner)
             // .add_systems(Update, first_microbe_spawner)
             .add_systems(Update, microbes_spawner)
@@ -25,6 +25,7 @@ impl Plugin for CharacterPlugin {
             //.add_systems(Update, seek_system)
             .add_systems(Update, draw_entities)
             .add_systems(Update, camera_scale)
+            .add_systems(Update, draw_entities_points)
             .insert_resource(MicrobeStats{
                 min_count: 0,
                 max_count: 3000,
@@ -36,7 +37,7 @@ impl Plugin for CharacterPlugin {
                 spawn_radius_max: 815.0 }) // 815
             .insert_resource(CharacterEnergyStats{
                 max_count: 1000.0,
-                regeneration_rate_per_sec: 300.0,
+                regeneration_rate_per_sec: 100.0,
                 character_microbes_die_energy_back: 10.0,
                 enemy_microbes_kill_energy_reward: 20.0,
             })
