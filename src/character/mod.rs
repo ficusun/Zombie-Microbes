@@ -44,7 +44,7 @@ impl Plugin for CharacterPlugin {
             .insert_resource(SkillsCd{
                 follow_cursor: 5.,
                 target_attack: 2.,
-                patrolling: 10.,
+                patrolling: 20.,
             });
     }
 }

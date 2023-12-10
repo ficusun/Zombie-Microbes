@@ -54,20 +54,18 @@ pub fn keyboard_input_system(
 
         player_transform.translation += vel.normalize_or_zero();
 
-        let point1 = cursor_targets.0.0.is_some();
-        let point2 = cursor_targets.0.1.is_some();
-        println!("{}, {}", point1, point2);
-        if !(!skill_cd.0.finished() && (!point1 || !point2)) {
-            return
+        if keyboard_input.just_pressed(KeyCode::Q) {
+            println!("Spawn microbes");
+            toSpawn.0 = true;
         }
 
-        // combat.0 = false;
-        //
-        // if keyboard_input.pressed(KeyCode::E) {
-        //     combat.0 = true;
-        //     target.0 = curr.0;
-        //     //println!("{}", curr.0)
-        // }
+        let points_present = cursor_targets.0.0.is_some() || cursor_targets.0.1.is_some();
+        let skill_available = skill_cd.0.finished();
+
+        // when skill unavailable or no points on the visible map character can't do magic
+        if !skill_available || !points_present {
+            return
+        }
 
         if keyboard_input.pressed(KeyCode::Key1) {
             println!("FollowCursor start");
@@ -75,7 +73,7 @@ pub fn keyboard_input_system(
                 .0
                 .set_duration(Duration::from_secs_f32(skills_cd.follow_cursor));
             skill_cd.0.reset();
-            *skill = Skill::FollowCursor(Some(curr.0)); //  Some(player_transform.translation.xy()) (Timer::from_seconds(skills_cd.follow_cursor, Repeating))
+            *skill = Skill::FollowCursor(None); //  Some(player_transform.translation.xy()) (Timer::from_seconds(skills_cd.follow_cursor, Repeating))
         }
 
         if keyboard_input.pressed(KeyCode::Key2) {
@@ -84,14 +82,16 @@ pub fn keyboard_input_system(
                 .0
                 .set_duration(Duration::from_secs_f32(skills_cd.target_attack));
             skill_cd.0.reset();
-            *skill = Skill::TargetAttack(Some(curr.0), 1.0); // (Timer::from_seconds(skills_cd.follow_cursor, Repeating))
+            *skill = Skill::TargetAttack(None,0.); // (Timer::from_seconds(skills_cd.follow_cursor, Repeating))
         }
 
-        if keyboard_input.just_pressed(KeyCode::Q) {
-            println!("press Q: {}", toSpawn.0);
-            toSpawn.0 = true;
-            // target.0 = curr.0;
-            println!("press Q: {}", toSpawn.0);
+        if keyboard_input.pressed(KeyCode::Key3) {
+            println!("Patrolling start");
+            skill_cd
+                .0
+                .set_duration(Duration::from_secs_f32(skills_cd.patrolling));
+            skill_cd.0.reset();
+            *skill = Skill::Patrolling(None, None); // (Timer::from_seconds(skills_cd.follow_cursor, Repeating))
         }
     }
 }

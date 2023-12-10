@@ -27,6 +27,9 @@ pub struct ToSpawnMic(pub bool);
 pub struct Energy(pub f32);
 
 #[derive(Component, Deref, DerefMut, Default)]
+pub struct ChildColor(pub Color);
+
+#[derive(Component, Deref, DerefMut, Default)]
 pub struct Target(pub Vec2);
 
 #[derive(Component, Deref, DerefMut, Default)]
@@ -162,6 +165,7 @@ pub struct CharacterBundle {
     pub character: IsCharacter,
     pub character_collision_group: CharacterCollisionGroup,
     pub cursor_targets: CursorTargets,
+    pub child_color: ChildColor,
     // pub is_player: IsPlayer,
 }
 
