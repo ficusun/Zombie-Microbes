@@ -98,14 +98,21 @@ impl Default for Skill {
     fn default() -> Self { Skill::Rest(30.) } // (Timer::from_seconds(1., TimerMode::Repeating))
 }
 
+#[derive(Component, Default, PartialEq, Copy, Clone)] // Default
+pub enum TypeOfEntity {
+    Character,
+    #[default]
+    Microbe,
+}
+
 #[derive(Component, Default)]
 pub struct IsBot(pub bool);
 
 #[derive(Resource)]
-pub struct CharacterCollisionGroups(pub u32);
+pub struct CharacterCollisionGroups(pub Group); // pub u32
 
 impl Default for CharacterCollisionGroups {
-    fn default() -> Self { Self(u32::MAX) } // (Timer::from_seconds(1., TimerMode::Repeating))
+    fn default() -> Self { Self(Group::ALL) } // u32::MAX (Timer::from_seconds(1., TimerMode::Repeating))
 }
 
 #[derive(Component, Default)]
@@ -143,6 +150,15 @@ pub struct CharacterEnergyStats {
     pub enemy_microbes_kill_energy_reward: f32,
 }
 
+#[derive(Resource, Default)]
+pub struct CharacterStats {
+    pub max_count_bots: i32,
+    pub size: f32,
+    pub health: f32,
+    pub energy: f32,
+    pub speed: f32,
+}
+
 // just hidden simple marker
 #[derive(Component, Default)]
 pub struct InvisiblePlaceholder;
@@ -162,6 +178,7 @@ pub struct CharacterBundle {
     pub skill_cd: SkillCd,
     pub skill: Skill,
     pub is_bot: IsBot,
+    pub type_of_entity: TypeOfEntity,
     pub character: IsCharacter,
     pub character_collision_group: CharacterCollisionGroup,
     pub cursor_targets: CursorTargets,
@@ -176,6 +193,7 @@ pub struct MicrobeBundle {
     // pub orbit: Orbit,
     pub draw_stats: DrawStats,
     pub target: Target,
+    pub type_of_entity: TypeOfEntity,
     // pub targets: Targets,
     // pub target: Target,
     // pub skill_target: SkillTarget,

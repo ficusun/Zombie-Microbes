@@ -26,7 +26,7 @@ impl Plugin for CharacterPlugin {
             .add_systems(Update, draw_entities)
             .add_systems(Update, camera_scale)
             .add_systems(Update, draw_entities_points)
-            .add_systems(Update, display_events)
+            .add_systems(Update, collision_events_handler)
             .insert_resource(MicrobeStats{
                 min_count: 0,
                 max_count: 3000,
@@ -46,6 +46,13 @@ impl Plugin for CharacterPlugin {
                 follow_cursor: 5.,
                 target_attack: 2.,
                 patrolling: 20.,
+            })
+            .insert_resource(CharacterStats{
+                max_count_bots: 15,
+                size: 1.5,
+                health: 3000.0,
+                energy: 200.0,
+                speed: 1.0,
             });
     }
 }

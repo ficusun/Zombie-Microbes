@@ -2,19 +2,16 @@ use bevy::prelude::*;
 use bevy_rapier2d::prelude::*;
 
 use super::components::*;
-use crate::input::components::Cursor;
-use bevy_rapier2d::rapier::prelude::ColliderHandle;
 use bevy_vector_shapes::prelude::*;
 use rand::Rng;
 use std::f32::consts::PI;
-use bevy::diagnostic::DiagnosticsStore;
-// use bevy_rapier2d::rapier::geometry::InteractionGroups;
-// use bevy_rapier2d::rapier::prelude::InteractionGroups;
 
-pub fn character_spawner(mut commands: Commands, mut ccg: ResMut<CharacterCollisionGroups>) {
-    //mccg: ResMut<MineCollisionGroups>
+pub fn character_spawner(
+    mut commands: Commands,
+    mut ccg: ResMut<CharacterCollisionGroups>,
+    character_stats: Res<CharacterStats>,
+    ) {
     let pos = Vec3::from((150., 150., 0.));
-    let character_size = 1.5;
 
     let parent_group = Group::from_bits_retain(bit_map_group_take(&mut ccg.0));
     let child_group = Group::from_bits_retain(bit_map_group_take(&mut ccg.0));
@@ -22,7 +19,7 @@ pub fn character_spawner(mut commands: Commands, mut ccg: ResMut<CharacterCollis
     commands
         .spawn(RigidBody::KinematicPositionBased)
         //.insert(KinematicCharacterController::default())
-        .insert(Collider::ball(character_size))
+        .insert(Collider::ball(character_stats.size))
         // .insert(Sensor)
         //.insert(CollisionGroups::new(fg, fg))
         .insert(Camera2dBundle::default())
@@ -35,7 +32,7 @@ pub fn character_spawner(mut commands: Commands, mut ccg: ResMut<CharacterCollis
             // draw_it: Default::default(),
             to_spawn_mic: Default::default(),
             draw_stats: DrawStats {
-                radius: character_size,
+                radius: character_stats.size,
                 color: Color::GREEN,
             },
             combat: CombatState(false),
@@ -45,6 +42,7 @@ pub fn character_spawner(mut commands: Commands, mut ccg: ResMut<CharacterCollis
             skill_cd: Default::default(),
             skill: Default::default(),
             is_bot: Default::default(),
+            type_of_entity: TypeOfEntity::Character,
             character: Default::default(),
             character_collision_group: CharacterCollisionGroup {
                 parent_id: parent_group,
@@ -75,7 +73,7 @@ pub fn character_spawner(mut commands: Commands, mut ccg: ResMut<CharacterCollis
     commands
         .spawn(RigidBody::KinematicPositionBased)
         //.insert(KinematicCharacterController::default())
-        .insert(Collider::ball(character_size))
+        .insert(Collider::ball(character_stats.size))
         //.insert(Sensor)
         //.insert(CollisionGroups::new(fg, fg))
         .insert(TransformBundle::from(Transform::from_xyz(
@@ -90,7 +88,7 @@ pub fn character_spawner(mut commands: Commands, mut ccg: ResMut<CharacterCollis
             // draw_it: Default::default(),
             to_spawn_mic: ToSpawnMic(true),
             draw_stats: DrawStats {
-                radius: character_size,
+                radius: character_stats.size,
                 color: Color::AQUAMARINE,
             },
             combat: CombatState(false),
@@ -100,6 +98,7 @@ pub fn character_spawner(mut commands: Commands, mut ccg: ResMut<CharacterCollis
             skill_cd: Default::default(),
             skill: Default::default(),
             is_bot: IsBot(true),
+            type_of_entity: TypeOfEntity::Character,
             character: Default::default(),
             character_collision_group: CharacterCollisionGroup {
                 parent_id: parent_group,
@@ -178,6 +177,7 @@ pub fn microbes_spawner(
                         // rest_target: Default::default(),
                         // parent_id: ParentEntityID(entity),
                         // targets: Default::default(),
+                        type_of_entity: Default::default(),
                         is_bot: IsBot(is_bot.0),
                         skill: Default::default(),
                     })
@@ -450,34 +450,44 @@ pub fn draw_entities(
     }
 }
 
-pub fn display_events(
+pub fn collision_events_handler(
     mut collision_events: EventReader<CollisionEvent>,
-    mut collider_query: Query<(&mut Health)>, // Entity Some(entity, mut health, collider_handel)
+    mut entities_query: Query<(&mut Health, &TypeOfEntity, &CharacterCollisionGroup,)>, // Entity Some(entity, mut health, collider_handel)
     mut cmd: Commands, // mut contact_force_events: EventReader<ContactForceEvent>,
+    mut ccg: ResMut<CharacterCollisionGroups>,
 ) {
     for collision_event in collision_events.read() {
         match collision_event {
             CollisionEvent::Started(collider1, collider2, _) => {
-                let health_entity_one = if let Ok(hel) = collider_query.get(*collider1) {
-                    hel.0
+                let health_entity_one = if let Ok((entity_health,_, _)) = entities_query.get(*collider1) {
+                    entity_health.0
                 } else {
                     0.
                 };
 
-                let health_entity_two = if let Ok(hel) = collider_query.get(*collider2) {
-                    hel.0
+                let health_entity_two = if let Ok((entity_health,_, _)) = entities_query.get(*collider2) {
+                    entity_health.0
                 } else {
                     0.
                 };
 
-                if let Ok(mut my_health) = collider_query.get_mut(*collider1) {
+                if let Ok((mut my_health, my_type, character_collision_group)) = entities_query.get_mut(*collider1) {
                     my_health.0 = my_health.0 - health_entity_two;
-                    if my_health.0 <= 0. {
-                        cmd.entity(*collider1).despawn_recursive()
+
+                    let no_health = my_health.0 <= 0.;
+                    match (no_health, my_type) {
+                        (true, TypeOfEntity::Character) => {
+                            println!("test ccg state {:#032b}", ccg.0);
+                            bit_map_group_back(&mut ccg.0, character_collision_group.parent_id);
+                            bit_map_group_back(&mut ccg.0, character_collision_group.child_id);
+                            println!("test ccg state {:#032b}", ccg.0);
+                        }
+                        _=>()
                     }
+                    cmd.entity(*collider1).despawn_recursive()
                 }
 
-                if let Ok(mut my_health) = collider_query.get_mut(*collider2) {
+                if let Ok((mut my_health, my_type, character_collision_group)) = entities_query.get_mut(*collider2) {
                     my_health.0 = my_health.0 - health_entity_one;
                     if my_health.0 <= 0. {
                         cmd.entity(*collider2).despawn_recursive()
@@ -486,36 +496,9 @@ pub fn display_events(
             }
             _ => (),
         }
-        println!("Received collision event: {:?}", collision_event);
+        // println!("Received collision event: {:?}", collision_event);
     }
-
-    // for contact_force_event in contact_force_events.iter() {
-    //     println!("Received contact force event: {:?}", contact_force_event);
-    // }
 }
-
-// pub fn display_events(
-//     mut collision_events: EventReader<CollisionEvent>,
-//     mut collider_query: Query<(&mut Health)>, // Entity Some(entity, mut health, collider_handel)
-// ) {
-//     for collision_event in collision_events.read() {
-//         match collision_event {
-//             CollisionEvent::Started(collider1, collider2,_) => {
-//                 let mut ent1 = collider_query.get_mut(*collider1);
-//                 let mut ent2 = collider_query.get_mut(*collider2);
-//                 match (ent1, ent2) {
-//                     (Ok((mut entity_one_health)), Ok((mut entity_two_health))) => {
-//                         entity_one_health.0 = entity_one_health.0 - entity_two_health.0;
-//                         entity_two_health.0 = entity_two_health.0 - entity_one_health.0;
-//                     }
-//                     _=>()
-//                 }
-//             },
-//             _=>()
-//         }
-//         println!("Received collision event: {:?}", collision_event);
-//     }
-// }
 
 pub fn draw_entities_points(
     mut painter: ShapePainter,
@@ -555,7 +538,7 @@ fn custom_cos_0_1_0(x: f32) -> f32 {
     0.5 * (1.0 + (x * 2.0 * PI + PI).cos())
 }
 
-fn bit_map_group_take(store: &mut u32) -> u32 {
+fn bit_map_group_take(store: &mut Group) -> u32 { // &mut u32
     for i in 0..32u32 {
         if *store & (1 << i) != 0 {
             *store = *store & !1 << i;
@@ -565,21 +548,21 @@ fn bit_map_group_take(store: &mut u32) -> u32 {
     0u32
 }
 
-fn bit_map_group_back(store: &mut u32, group: u32) {
+fn bit_map_group_back(store: &mut u32, group: Group) {
     *store = *store | group
 }
 
 
-fn text_update_system(
-    diagnostics: Res<DiagnosticsStore>,
-    mut query: Query<&mut Text, With<FpsText>>,
-) {
-    for mut text in &mut query {
-        if let Some(fps) = diagnostics.get(FrameTimeDiagnosticsPlugin::FPS) {
-            if let Some(value) = fps.smoothed() {
-                // Update the value of the second section
-                text.sections[1].value = format!("{value:.2}");
-            }
-        }
-    }
-}
+// fn text_update_system(
+//     diagnostics: Res<DiagnosticsStore>,
+//     mut query: Query<&mut Text, With<FpsText>>,
+// ) {
+//     for mut text in &mut query {
+//         if let Some(fps) = diagnostics.get(FrameTimeDiagnosticsPlugin::FPS) {
+//             if let Some(value) = fps.smoothed() {
+//                 // Update the value of the second section
+//                 text.sections[1].value = format!("{value:.2}");
+//             }
+//         }
+//     }
+// }
