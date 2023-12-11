@@ -1,14 +1,12 @@
 use bevy::prelude::*;
-use bevy::time::TimerMode::Repeating;
-use bevy_rapier2d::prelude::*;
 use std::time::Duration;
 
-use crate::character::components::{CombatState, Skill, SkillCd, SkillsCd, Target, ToSpawnMic};
 use crate::character::components::{CursorTargets, IsPlayer};
+use crate::character::components::{Skill, SkillCd, SkillsCd, ToSpawnMic};
 use crate::input::components::Cursor;
 
 pub fn keyboard_input_system(
-    mut curr: ResMut<Cursor>,
+    // curr: Res<Cursor>,
     skills_cd: Res<SkillsCd>,
     keyboard_input: Res<Input<KeyCode>>,
     mut players_transform: Query<
@@ -28,7 +26,7 @@ pub fn keyboard_input_system(
 
     if let Ok((
         mut player_transform,
-        mut cursor_targets,
+        cursor_targets,
         //mut target,
         mut toSpawn,
         mut skill,
@@ -59,12 +57,12 @@ pub fn keyboard_input_system(
             toSpawn.0 = true;
         }
 
-        let points_present = cursor_targets.0.0.is_some() || cursor_targets.0.1.is_some();
+        let points_present = cursor_targets.0 .0.is_some() || cursor_targets.0 .1.is_some();
         let skill_available = skill_cd.0.finished();
 
         // when skill unavailable or no points on the visible map character can't do magic
         if !skill_available || !points_present {
-            return
+            return;
         }
 
         if keyboard_input.pressed(KeyCode::Key1) {
@@ -82,7 +80,7 @@ pub fn keyboard_input_system(
                 .0
                 .set_duration(Duration::from_secs_f32(skills_cd.target_attack));
             skill_cd.0.reset();
-            *skill = Skill::TargetAttack(None,0.); // (Timer::from_seconds(skills_cd.follow_cursor, Repeating))
+            *skill = Skill::TargetAttack(None, 0.); // (Timer::from_seconds(skills_cd.follow_cursor, Repeating))
         }
 
         if keyboard_input.pressed(KeyCode::Key3) {
@@ -99,9 +97,9 @@ pub fn keyboard_input_system(
 pub fn mouse_click_system(
     curr: Res<Cursor>,
     mouse: Res<Input<MouseButton>>,
-    mut player: Query<(&mut CursorTargets), With<IsPlayer>>,
+    mut player: Query<&mut CursorTargets, With<IsPlayer>>,
 ) {
-    if let Ok((mut cursor_targets)) = player.get_single_mut() {
+    if let Ok(mut cursor_targets) = player.get_single_mut() {
         if mouse.just_pressed(MouseButton::Left) {
             if cursor_targets.0 .0.is_some() {
                 cursor_targets.0 .0 = None
@@ -140,7 +138,7 @@ pub fn mouse_input_system(
     windows: Query<&Window>,
     player: Query<(&Transform, &Camera), With<IsPlayer>>,
 ) {
-    if let (Ok(mut window), Ok(mut player)) = (windows.get_single(), player.get_single()) {
+    if let (Ok(window), Ok(player)) = (windows.get_single(), player.get_single()) {
         // if let Some(t) = cursor_convert_pos_to_world(window) {
         //     curr.0 = t;
         // }

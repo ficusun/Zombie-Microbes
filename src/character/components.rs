@@ -1,6 +1,5 @@
-use std::time;
+
 use bevy::prelude::*;
-use bevy_rapier2d::prelude::Group;
 
 #[derive(Component, Deref, DerefMut, Default)]
 pub struct Health(pub f32);
@@ -67,14 +66,14 @@ pub struct DrawStats {
 }
 #[derive(Component, Default)]
 pub struct CharacterCollisionGroup {
-    pub parent_id: Group,
-    pub child_id: Group
+    pub parent_id: u32,
+    pub child_id: u32,
 }
-#[derive(Resource, Default)]
-pub struct MineCollisionGroups {
-    pub parent_id: Group,
-    pub child_id: Group
-}
+// #[derive(Resource, Default)]
+// pub struct MineCollisionGroups {
+//     pub parent_id: u32,
+//     pub child_id: u32,
+// }
 
 #[derive(Component, Default)]
 pub struct SkillCd(pub Timer);
@@ -109,10 +108,10 @@ pub enum TypeOfEntity {
 pub struct IsBot(pub bool);
 
 #[derive(Resource)]
-pub struct CharacterCollisionGroups(pub Group); // pub u32
+pub struct CharacterCollisionGroups(pub u32); // pub u32
 
 impl Default for CharacterCollisionGroups {
-    fn default() -> Self { Self(Group::ALL) } // u32::MAX (Timer::from_seconds(1., TimerMode::Repeating))
+    fn default() -> Self { Self(u32::MAX) } // u32::MAX (Timer::from_seconds(1., TimerMode::Repeating))
 }
 
 #[derive(Component, Default)]
@@ -140,6 +139,7 @@ pub struct MicrobeStats {
     pub speed: f32,
     pub spawn_radius_min: f32,
     pub spawn_radius_max: f32,
+    pub regeneration_health_rate_per_sec: f32,
 }
 
 #[derive(Resource, Default)]
@@ -157,6 +157,7 @@ pub struct CharacterStats {
     pub health: f32,
     pub energy: f32,
     pub speed: f32,
+    pub regeneration_health_rate_per_sec: f32,
 }
 
 // just hidden simple marker
@@ -194,18 +195,49 @@ pub struct MicrobeBundle {
     pub draw_stats: DrawStats,
     pub target: Target,
     pub type_of_entity: TypeOfEntity,
+    pub character_collision_group: CharacterCollisionGroup,
     // pub targets: Targets,
     // pub target: Target,
     // pub skill_target: SkillTarget,
     // pub rest_target: RestTarget,
     // pub parent_id: ParentEntityID,
-    pub is_bot: IsBot,
+    // pub is_bot: IsBot,
     pub skill: Skill,
 }
 
+#[derive(Component)]
+pub struct FpsText;
+
+// display player states
+#[derive(Component)]
+pub enum TextStates {
+    CharacterHealth,
+    CharacterEnergy,
+    DestroyedCharacters,
+    DestroyedMicrobes,
+    YourPopulation,
+    SkillCd,
+}
+
+
+#[derive(Resource, PartialEq)]
+pub enum GameStatus {
+    Menu,
+    ResetGame,
+    ResetMenu,
+    SpawnCharacter,
+    Game,
+    SpawnMenu,
+}
+
+#[derive(Resource, PartialEq)]
+pub struct PlayerEntityId (pub Entity);
+
+#[derive(Resource)]
+pub struct WorldSize(pub f32);
 
 #[derive(Component)]
-struct FpsText;
+pub struct EntitiesInWorld;
 
 #[derive(Component)]
-struct ColorText;
+pub struct MenuCamera;

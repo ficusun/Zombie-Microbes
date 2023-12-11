@@ -13,16 +13,18 @@ pub struct CharacterPlugin;
 impl Plugin for CharacterPlugin {
     fn build(&self, app: &mut App) {
         app
+            .insert_resource(GameStatus::SpawnMenu)
+            .insert_resource(PlayerEntityId(Entity::from_bits(1234234567u64)))
+            .insert_resource(WorldSize(250.))
             .insert_resource(CharacterCollisionGroups::default())
-            .add_systems(Startup, character_spawner)
-            // .add_systems(Update, first_microbe_spawner)
+            .add_systems(Update, game_control)
+            .add_systems(Update, character_spawner)
             .add_systems(Update, microbes_spawner)
-            // .add_systems(Update, calc_microbes_pos)
             .add_systems(Update, energy_regeneration)
+            .add_systems(Update, health_regeneration)
             .add_systems(Update, skill_process_time)
             .add_systems(Update, skill_to_children)
-            .add_systems(Update, new_seek_system)
-            //.add_systems(Update, seek_system)
+            .add_systems(Update, seek_system)
             .add_systems(Update, draw_entities)
             .add_systems(Update, camera_scale)
             .add_systems(Update, draw_entities_points)
@@ -34,8 +36,10 @@ impl Plugin for CharacterPlugin {
                 health: 50.0,
                 spawn_price: 20.0,
                 speed: 40.0,
-                spawn_radius_min: 3.0,
-                spawn_radius_max: 81.0 }) // 815
+                spawn_radius_min: 2.5,
+                spawn_radius_max: 81.0,
+                regeneration_health_rate_per_sec: 0.5,
+            }) // 815
             .insert_resource(CharacterEnergyStats{
                 max_count: 1000.0,
                 regeneration_rate_per_sec: 100.0,
@@ -53,6 +57,12 @@ impl Plugin for CharacterPlugin {
                 health: 3000.0,
                 energy: 200.0,
                 speed: 1.0,
-            });
+                regeneration_health_rate_per_sec: 5.0,
+            })
+            .add_systems(Update, fps_display)
+            .add_systems(Update, entities_count_display)
+            .add_systems(Update, display_player_state)
+            //.add_systems(Update, energy_display)
+            .add_systems(Startup, test_text);
     }
 }

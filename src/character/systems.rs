@@ -6,119 +6,191 @@ use bevy_vector_shapes::prelude::*;
 use rand::Rng;
 use std::f32::consts::PI;
 
+pub fn game_control(
+    // game_status: Res<GameStatus>,
+    mut game_status: ResMut<GameStatus>,
+    //mut game_reset: ResMut<GameReset>,
+    //mut character_init: ResMut<CharacterInit>,
+    mut commands: Commands,
+    mut ccg: ResMut<CharacterCollisionGroups>,
+    query: Query<Entity, With<IsCharacter>>,
+    character_stats: Res<CharacterStats>,
+    mut player_entity_id: ResMut<PlayerEntityId>,
+) {
+    match *game_status {
+        GameStatus::ResetGame => {
+            ccg.0 = u32::MAX;
+            for entity in query.iter() {
+                commands.entity(entity).despawn_recursive()
+            }
+            *game_status = GameStatus::SpawnCharacter
+        }
+        GameStatus::SpawnCharacter => {
+            *game_status = GameStatus::ResetMenu;
+            let pos = Vec3::from((0., 0., 0.));
+
+            let parent_group = bit_map_group_take(&mut ccg.0);
+            let child_group = bit_map_group_take(&mut ccg.0);
+            // player
+            player_entity_id.0 = commands
+                .spawn(RigidBody::KinematicPositionBased)
+                .insert(Collider::ball(character_stats.size))
+                .insert(Camera2dBundle::default())
+                .insert(TransformBundle::from(Transform::from_xyz(
+                    pos.x, pos.y, pos.z,
+                )))
+                .insert(CharacterBundle {
+                    health: Health(character_stats.health),
+                    speed: Speed(character_stats.speed),
+                    to_spawn_mic: Default::default(),
+                    draw_stats: DrawStats {
+                        radius: character_stats.size,
+                        color: Color::GREEN,
+                    },
+                    combat: CombatState(false),
+                    target: Default::default(),
+                    energy: Energy(character_stats.energy),
+                    count_microbes: Default::default(),
+                    skill_cd: Default::default(),
+                    skill: Default::default(),
+                    is_bot: Default::default(),
+                    type_of_entity: TypeOfEntity::Character,
+                    character: Default::default(),
+                    character_collision_group: CharacterCollisionGroup {
+                        parent_id: parent_group,
+                        child_id: child_group,
+                    },
+                    cursor_targets: Default::default(),
+                    child_color: ChildColor(Color::GREEN),
+                })
+                .insert(CollisionGroups::new(
+                    Group::from_bits_retain(parent_group),
+                    Group::from_bits_retain(u32::MAX & !child_group),
+                ))
+                .insert(IsPlayer)
+                .with_children(|parent| {
+                    parent
+                        .spawn(())
+                        .insert(InvisiblePlaceholder)
+                        .insert(Skill::default());
+                })
+                .id();
+        }
+        _ => (),
+    }
+}
 pub fn character_spawner(
     mut commands: Commands,
     mut ccg: ResMut<CharacterCollisionGroups>,
     character_stats: Res<CharacterStats>,
-    ) {
-    let pos = Vec3::from((150., 150., 0.));
+    microbe_stats: Res<MicrobeStats>,
+    world_size: Res<WorldSize>,
+    bots: Query<(&IsBot, &IsCharacter)>,
+    game_status: Res<GameStatus>,
+    rapier_context: Res<RapierContext>,
+) {
+    match *game_status {
+        GameStatus::Game => (),
+        _ => return,
+    }
 
-    let parent_group = Group::from_bits_retain(bit_map_group_take(&mut ccg.0));
-    let child_group = Group::from_bits_retain(bit_map_group_take(&mut ccg.0));
-    // player
-    commands
-        .spawn(RigidBody::KinematicPositionBased)
-        //.insert(KinematicCharacterController::default())
-        .insert(Collider::ball(character_stats.size))
-        // .insert(Sensor)
-        //.insert(CollisionGroups::new(fg, fg))
-        .insert(Camera2dBundle::default())
-        .insert(TransformBundle::from(Transform::from_xyz(
-            pos.x, pos.y, pos.z,
-        )))
-        .insert(CharacterBundle {
-            health: Health(3000.),
-            speed: Speed(1.),
-            // draw_it: Default::default(),
-            to_spawn_mic: Default::default(),
-            draw_stats: DrawStats {
-                radius: character_stats.size,
-                color: Color::GREEN,
-            },
-            combat: CombatState(false),
-            target: Default::default(),
-            energy: Energy(1.),
-            count_microbes: Default::default(),
-            skill_cd: Default::default(),
-            skill: Default::default(),
-            is_bot: Default::default(),
-            type_of_entity: TypeOfEntity::Character,
-            character: Default::default(),
-            character_collision_group: CharacterCollisionGroup {
-                parent_id: parent_group,
-                child_id: child_group,
-            },
-            cursor_targets: Default::default(),
-            child_color: ChildColor(Color::GREEN),
-        })
-        .insert(CollisionGroups::new(
-            parent_group,
-            Group::ALL & !child_group,
-        ))
-        .insert(IsPlayer)
-        .with_children(|parent| {
-            parent
-                .spawn(())
-                .insert(InvisiblePlaceholder)
-                .insert(Skill::default());
+    let mut bot_count = 0;
+    for (is_bot, _) in bots.iter() {
+        if is_bot.0 {
+            bot_count += 1;
+        }
+    }
+
+    if bot_count < character_stats.max_count_bots {
+        let pos = find_free_space(
+            &rapier_context,
+            microbe_stats.spawn_radius_max,
+            world_size.0,
+        );
+
+        if pos.is_none() {
+            return;
+        }
+
+        let parent_group = bit_map_group_take(&mut ccg.0);
+        let child_group = bit_map_group_take(&mut ccg.0);
+
+        commands
+            .spawn(RigidBody::KinematicPositionBased)
+            .insert(Collider::ball(character_stats.size))
+            .insert(TransformBundle::from(Transform::from_xyz(
+                pos.unwrap().x,
+                pos.unwrap().y,
+                0.0,
+            )))
+            .insert(CharacterBundle {
+                health: Health(character_stats.health),
+                speed: Speed(character_stats.speed),
+                to_spawn_mic: ToSpawnMic(true),
+                draw_stats: DrawStats {
+                    radius: character_stats.size,
+                    color: Color::AQUAMARINE,
+                },
+                combat: CombatState(false),
+                target: Default::default(),
+                energy: Energy(character_stats.energy),
+                count_microbes: Default::default(),
+                skill_cd: Default::default(),
+                skill: Default::default(),
+                is_bot: IsBot(true),
+                type_of_entity: TypeOfEntity::Character,
+                character: Default::default(),
+                character_collision_group: CharacterCollisionGroup {
+                    parent_id: parent_group,
+                    child_id: child_group,
+                },
+                cursor_targets: Default::default(),
+                child_color: ChildColor(Color::BEIGE),
+            })
+            .insert(CollisionGroups::new(
+                Group::from_bits_retain(parent_group),
+                Group::from_bits_retain(u32::MAX & !child_group),
+            ))
+            .with_children(|parent| {
+                parent
+                    .spawn(())
+                    .insert(InvisiblePlaceholder)
+                    .insert(Skill::default());
+            });
+    }
+}
+
+fn find_free_space(
+    rapier_context: &Res<RapierContext>,
+    radius: f32,
+    world_border: f32,
+) -> Option<Vec2> {
+    let filter = QueryFilter::only_kinematic();
+    let mut point = Vec2::new(0.0, 0.0);
+    let mut rng = rand::thread_rng();
+
+    let shape = Collider::ball(radius);
+    let mut i = 0;
+    let mut ready_return = true;
+
+    while i < 100 {
+        point.x = rng.gen_range(-world_border..world_border);
+        point.y = rng.gen_range(-world_border..world_border);
+
+        rapier_context.intersections_with_shape(point, 0., &shape, filter, |_| {
+            ready_return = false;
+            false
         });
 
-    // test bot /////////////////////////////////////////////////////////////
-    // test bot /////////////////////////////////////////////////////////////
-    // test bot /////////////////////////////////////////////////////////////
+        if ready_return {
+            return Some(point);
+        }
 
-    let parent_group = Group::from_bits_retain(bit_map_group_take(&mut ccg.0));
-    let child_group = Group::from_bits_retain(bit_map_group_take(&mut ccg.0));
+        ready_return = true;
+        i += 1;
+    }
 
-    commands
-        .spawn(RigidBody::KinematicPositionBased)
-        //.insert(KinematicCharacterController::default())
-        .insert(Collider::ball(character_stats.size))
-        //.insert(Sensor)
-        //.insert(CollisionGroups::new(fg, fg))
-        .insert(TransformBundle::from(Transform::from_xyz(
-            pos.x - 150.,
-            pos.y - 150.,
-            pos.z,
-        )))
-        // .insert(Camera2dBundle::default())
-        .insert(CharacterBundle {
-            health: Health(3000.),
-            speed: Speed(1.),
-            // draw_it: Default::default(),
-            to_spawn_mic: ToSpawnMic(true),
-            draw_stats: DrawStats {
-                radius: character_stats.size,
-                color: Color::AQUAMARINE,
-            },
-            combat: CombatState(false),
-            target: Default::default(),
-            energy: Energy(500.),
-            count_microbes: Default::default(),
-            skill_cd: Default::default(),
-            skill: Default::default(),
-            is_bot: IsBot(true),
-            type_of_entity: TypeOfEntity::Character,
-            character: Default::default(),
-            character_collision_group: CharacterCollisionGroup {
-                parent_id: parent_group,
-                child_id: child_group,
-            },
-            cursor_targets: Default::default(),
-            child_color: ChildColor(Color::BEIGE),
-        })
-        .insert(CollisionGroups::new(
-            parent_group,
-            Group::ALL & !child_group,
-        ))
-        //.insert(IsPlayer)
-        .with_children(|parent| {
-            parent
-                .spawn(())
-                .insert(InvisiblePlaceholder)
-                .insert(Skill::default());
-        });
-    println!("Spawned");
+    None
 }
 
 pub fn microbes_spawner(
@@ -132,8 +204,14 @@ pub fn microbes_spawner(
         &IsBot,
         &CharacterCollisionGroup,
         &ChildColor,
-    )>, // , With<IsCharacter>
+    )>,
+    game_status: Res<GameStatus>,
 ) {
+    match *game_status {
+        GameStatus::Game => (),
+        _ => return,
+    }
+
     let mut rng = rand::thread_rng();
     for (entity, mut to_spawn_min, mut energy, children, is_bot, ccg, child_color) in
         characters_query.iter_mut()
@@ -149,7 +227,7 @@ pub fn microbes_spawner(
                 //Group::ALL & 1<<1
 
                 // test groups
-                let mut not_interact = (Group::ALL & !ccg.parent_id) & !ccg.child_id;
+                let not_interact_with = (u32::MAX & !ccg.parent_id) & !ccg.child_id;
                 //not_interact = not_interact & !ccg.child_id;
 
                 let x =
@@ -161,11 +239,18 @@ pub fn microbes_spawner(
                 children_entity_commands
                     .insert(Velocity::zero())
                     .insert(Collider::ball(microbe_stats.size))
-                    .insert(CollisionGroups::new(ccg.child_id, not_interact))
+                    .insert(CollisionGroups::new(
+                        Group::from_bits_retain(ccg.child_id),
+                        Group::from_bits_retain(not_interact_with),
+                    ))
                     .insert(ActiveEvents::COLLISION_EVENTS)
                     .insert(TransformBundle::from(Transform::from_xyz(x, y, 0.)))
                     .insert(MicrobeBundle {
-                        health: if is_bot.0 { Health(100.) } else { Health(50.) },
+                        health: if is_bot.0 {
+                            Health(microbe_stats.health)
+                        } else {
+                            Health(microbe_stats.health / 2.0)
+                        },
                         is_microbe: Default::default(),
                         // orbit: Orbit(20. + i as f32),
                         draw_stats: DrawStats {
@@ -178,7 +263,11 @@ pub fn microbes_spawner(
                         // parent_id: ParentEntityID(entity),
                         // targets: Default::default(),
                         type_of_entity: Default::default(),
-                        is_bot: IsBot(is_bot.0),
+                        character_collision_group: CharacterCollisionGroup {
+                            parent_id: ccg.parent_id,
+                            child_id: ccg.child_id,
+                        },
+                        //is_bot: IsBot(is_bot.0),
                         skill: Default::default(),
                     })
                     .insert(Mover {
@@ -194,9 +283,10 @@ pub fn microbes_spawner(
                             microbe_stats.spawn_radius_min..=microbe_stats.spawn_radius_max,
                         ),
                         speed: microbe_stats.speed,
-                    });
+                    })
+                    .set_parent(entity);
 
-                children_entity_commands.set_parent(entity);
+                //children_entity_commands.set_parent(entity);
                 // if let Some(mut entityCom) = commands.get_entity(entity) {
                 //     entityCom.add_child(children_entity_commands.id());
                 // };
@@ -214,8 +304,8 @@ pub fn camera_scale(
 ) {
     if let Ok((microbes, mut orthographic_projection)) = player.get_single_mut() {
         let scale = (microbes.len() as i32 / microbe_stats.max_count) as f32;
-        let min: f32 = 0.05;
-        let max: f32 = 1.05;
+        let min: f32 = 0.1;
+        let max: f32 = 1.1;
         orthographic_projection.scale = min + scale * (max - min); // microbes as f32 * 0.005;
     }
 }
@@ -232,6 +322,28 @@ pub fn energy_regeneration(
     }
 }
 
+pub fn health_regeneration(
+    mut characters: Query<(&mut Health, &TypeOfEntity)>,
+    microbe_stats: Res<MicrobeStats>,
+    character_stats: Res<CharacterStats>,
+    time: Res<Time>,
+) {
+    for (mut health, type_of_entity) in characters.iter_mut() {
+        match type_of_entity {
+            TypeOfEntity::Character => {
+                health.0 = (health.0
+                    + character_stats.regeneration_health_rate_per_sec * time.delta_seconds())
+                .min(character_stats.health)
+            }
+            TypeOfEntity::Microbe => {
+                health.0 = (health.0
+                    + microbe_stats.regeneration_health_rate_per_sec * time.delta_seconds())
+                .min(microbe_stats.health)
+            }
+        }
+    }
+}
+
 pub fn skill_process_time(
     mut characters: Query<(&mut SkillCd, &mut Skill), With<IsCharacter>>,
     time: Res<Time>,
@@ -245,12 +357,12 @@ pub fn skill_process_time(
 }
 
 pub fn skill_to_children(
-    mut characters: Query<(&Skill, &Children, &Transform, &mut CursorTargets), With<IsCharacter>>, //   &IsBot, is_bot, , Changed<Skill>
+    characters: Query<(&Skill, &Children, &Transform, &CursorTargets), With<IsCharacter>>, //   &IsBot, is_bot, , Changed<Skill>
     mut microbes_query: Query<(&mut Skill), (With<Microbe>, Without<IsCharacter>)>,
     //cursor: Res<Cursor>,
     microbe_stats: Res<MicrobeStats>,
 ) {
-    for (skill, children, parent_transform, mut cursor_targets) in characters.iter_mut() {
+    for (skill, children, parent_transform, cursor_targets) in characters.iter() {
         let mut skill_to_child: Skill;
         match *skill {
             Skill::Rest(_) => {
@@ -334,7 +446,7 @@ fn scale_value(value: f32, start1: f32, stop1: f32, start2: f32, stop2: f32) -> 
     start2 + (stop2 - start2) * ((value - start1) / (stop1 - start1))
 }
 
-pub fn new_seek_system(
+pub fn seek_system(
     mut microbes_query: Query<
         (
             &Transform,
@@ -415,7 +527,7 @@ pub fn new_seek_system(
                 }
             }
             Skill::FollowCursor(tar1) => {
-                if let Some(new_target) = (tar1) {
+                if let Some(new_target) = tar1 {
                     microbe_target.0 = *new_target;
                 }
 
@@ -439,10 +551,7 @@ pub fn new_seek_system(
     }
 }
 
-pub fn draw_entities(
-    mut painter: ShapePainter,
-    mut draw_data: Query<(&GlobalTransform, &DrawStats)>,
-) {
+pub fn draw_entities(mut painter: ShapePainter, draw_data: Query<(&GlobalTransform, &DrawStats)>) {
     for (transform, draw_stats) in draw_data.iter() {
         painter.color = draw_stats.color;
         painter.transform.translation = transform.translation();
@@ -452,51 +561,78 @@ pub fn draw_entities(
 
 pub fn collision_events_handler(
     mut collision_events: EventReader<CollisionEvent>,
-    mut entities_query: Query<(&mut Health, &TypeOfEntity, &CharacterCollisionGroup,)>, // Entity Some(entity, mut health, collider_handel)
-    mut cmd: Commands, // mut contact_force_events: EventReader<ContactForceEvent>,
+    mut entities_query: Query<(&mut Health, &TypeOfEntity, &CharacterCollisionGroup)>, // Entity Some(entity, mut health, collider_handel)
+    mut cmd: Commands,
     mut ccg: ResMut<CharacterCollisionGroups>,
+    mut game_status: ResMut<GameStatus>,
+    mut player_entity_id: ResMut<PlayerEntityId>,
 ) {
+    match *game_status {
+        GameStatus::Game => (),
+        _ => return,
+    }
+
     for collision_event in collision_events.read() {
         match collision_event {
             CollisionEvent::Started(collider1, collider2, _) => {
-                let health_entity_one = if let Ok((entity_health,_, _)) = entities_query.get(*collider1) {
-                    entity_health.0
-                } else {
-                    0.
-                };
+                let health_entity_one =
+                    if let Ok((entity_health, _, _)) = entities_query.get(*collider1) {
+                        entity_health.0
+                    } else {
+                        0.
+                    };
 
-                let health_entity_two = if let Ok((entity_health,_, _)) = entities_query.get(*collider2) {
-                    entity_health.0
-                } else {
-                    0.
-                };
+                let health_entity_two =
+                    if let Ok((entity_health, _, _)) = entities_query.get(*collider2) {
+                        entity_health.0
+                    } else {
+                        0.
+                    };
 
-                if let Ok((mut my_health, my_type, character_collision_group)) = entities_query.get_mut(*collider1) {
+                if let Ok((mut my_health, my_type, character_collision_group)) =
+                    entities_query.get_mut(*collider1)
+                {
                     my_health.0 = my_health.0 - health_entity_two;
 
-                    let no_health = my_health.0 <= 0.;
+                    let no_health = my_health.0 <= 0.0;
+
                     match (no_health, my_type) {
                         (true, TypeOfEntity::Character) => {
-                            println!("test ccg state {:#032b}", ccg.0);
                             bit_map_group_back(&mut ccg.0, character_collision_group.parent_id);
                             bit_map_group_back(&mut ccg.0, character_collision_group.child_id);
-                            println!("test ccg state {:#032b}", ccg.0);
+                            if player_entity_id.0.eq(collider1) {
+                                *game_status = GameStatus::SpawnMenu;
+                            }
+                            cmd.entity(*collider1).despawn_recursive()
                         }
-                        _=>()
+                        (true, TypeOfEntity::Microbe) => cmd.entity(*collider1).despawn_recursive(),
+                        _ => (),
                     }
-                    cmd.entity(*collider1).despawn_recursive()
                 }
 
-                if let Ok((mut my_health, my_type, character_collision_group)) = entities_query.get_mut(*collider2) {
+                if let Ok((mut my_health, my_type, character_collision_group)) =
+                    entities_query.get_mut(*collider2)
+                {
                     my_health.0 = my_health.0 - health_entity_one;
-                    if my_health.0 <= 0. {
-                        cmd.entity(*collider2).despawn_recursive()
+
+                    let no_health = my_health.0 <= 0.0;
+                    match (no_health, my_type) {
+                        (true, TypeOfEntity::Character) => {
+                            bit_map_group_back(&mut ccg.0, character_collision_group.parent_id);
+                            bit_map_group_back(&mut ccg.0, character_collision_group.child_id);
+
+                            if player_entity_id.0.eq(collider2) {
+                                *game_status = GameStatus::SpawnMenu;
+                            }
+                            cmd.entity(*collider2).despawn_recursive()
+                        }
+                        (true, TypeOfEntity::Microbe) => cmd.entity(*collider2).despawn_recursive(),
+                        _ => (),
                     }
                 }
             }
             _ => (),
         }
-        // println!("Received collision event: {:?}", collision_event);
     }
 }
 
@@ -511,34 +647,35 @@ pub fn draw_entities_points(
             (Some(point1), Some(point2)) => {
                 painter.color = point_one_color;
                 painter.transform.translation = point1.extend(0.);
-                painter.circle(6.);
+                painter.circle(1.);
 
                 painter.color = point_two_color;
                 painter.transform.translation = point2.extend(0.);
-                painter.circle(6.);
+                painter.circle(1.);
             }
             (None, Some(point2)) => {
                 //painter.transform.translation = point1.extend(0.);
                 painter.color = point_two_color;
                 painter.transform.translation = point2.extend(0.);
-                painter.circle(6.);
+                painter.circle(1.);
             }
             (Some(point1), None) => {
                 painter.color = point_one_color;
                 painter.transform.translation = point1.extend(0.);
                 //painter.transform.translation = point2.extend(0.);
-                painter.circle(6.);
+                painter.circle(1.);
             }
             _ => (),
         }
     }
 }
 
-fn custom_cos_0_1_0(x: f32) -> f32 {
-    0.5 * (1.0 + (x * 2.0 * PI + PI).cos())
-}
+// fn custom_cos_0_1_0(x: f32) -> f32 {
+//     0.5 * (1.0 + (x * 2.0 * PI + PI).cos())
+// }
 
-fn bit_map_group_take(store: &mut Group) -> u32 { // &mut u32
+fn bit_map_group_take(store: &mut u32) -> u32 {
+    // &mut u32
     for i in 0..32u32 {
         if *store & (1 << i) != 0 {
             *store = *store & !1 << i;
@@ -548,10 +685,9 @@ fn bit_map_group_take(store: &mut Group) -> u32 { // &mut u32
     0u32
 }
 
-fn bit_map_group_back(store: &mut u32, group: Group) {
+fn bit_map_group_back(store: &mut u32, group: u32) {
     *store = *store | group
 }
-
 
 // fn text_update_system(
 //     diagnostics: Res<DiagnosticsStore>,
@@ -566,3 +702,280 @@ fn bit_map_group_back(store: &mut u32, group: Group) {
 //         }
 //     }
 // }
+
+pub fn test_text(mut commands: Commands, asset_server: Res<AssetServer>) {
+    // FPS
+    // #[cfg(feature = "default_font")]
+
+    let font_size = 24.0;
+
+    commands.spawn((
+        // Create a TextBundle that has a Text with a list of sections.
+        TextBundle::from_section(
+            "FPS: ",
+            TextStyle {
+                // This font is loaded and will be used instead of the default font.
+                font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                font_size,
+                ..default()
+            },
+        )
+        .with_text_alignment(TextAlignment::Center)
+        // Set the style of the TextBundle itself.
+        .with_style(Style {
+            position_type: PositionType::Absolute,
+            top: Val::Px(5.0),
+            left: Val::Px(5.0),
+            // bottom:
+            // right: ,
+            ..default()
+        }),
+        FpsText,
+    ));
+
+    // EntitiesInWorld
+    commands.spawn((
+        // Create a TextBundle that has a Text with a list of sections.
+        TextBundle::from_section(
+            "Entities: ",
+            TextStyle {
+                // This font is loaded and will be used instead of the default font.
+                font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                font_size,
+                color: Color::GOLD,
+                ..default()
+            },
+        )
+        .with_text_alignment(TextAlignment::Center)
+        // Set the style of the TextBundle itself.
+        .with_style(Style {
+            position_type: PositionType::Absolute,
+            top: Val::Px(30.0),
+            left: Val::Px(5.0),
+            // bottom:
+            // right: ,
+            ..default()
+        }),
+        EntitiesInWorld,
+    ));
+
+    // DestroyedMicrobes
+    commands.spawn((
+        // Create a TextBundle that has a Text with a list of sections.
+        TextBundle::from_section(
+            "Destroyed Microbes: ",
+            TextStyle {
+                // This font is loaded and will be used instead of the default font.
+                font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                font_size,
+                ..default()
+            },
+        )
+        .with_text_alignment(TextAlignment::Center)
+        // Set the style of the TextBundle itself.
+        .with_style(Style {
+            position_type: PositionType::Absolute,
+            top: Val::Px(55.0),
+            left: Val::Px(5.0),
+            // bottom:
+            // right: ,
+            ..default()
+        }),
+        TextStates::DestroyedMicrobes,
+        // DestroyedMicrobes,
+    ));
+
+    // DestroyedCharacters
+    commands.spawn((
+        // Create a TextBundle that has a Text with a list of sections.
+        TextBundle::from_section(
+            "Destroyed Characters: ",
+            TextStyle {
+                // This font is loaded and will be used instead of the default font.
+                font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                font_size,
+                ..default()
+            },
+        )
+        .with_text_alignment(TextAlignment::Center)
+        // Set the style of the TextBundle itself.
+        .with_style(Style {
+            position_type: PositionType::Absolute,
+            top: Val::Px(80.0),
+            left: Val::Px(5.0),
+            // bottom:
+            // right: ,
+            ..default()
+        }),
+        TextStates::DestroyedCharacters,
+        //DestroyedCharacters,
+    ));
+
+    // CharacterEnergy
+    commands.spawn((
+        // Create a TextBundle that has a Text with a list of sections.
+        TextBundle::from_section(
+            "Character Energy: ",
+            TextStyle {
+                // This font is loaded and will be used instead of the default font.
+                font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                font_size,
+                ..default()
+            },
+        )
+        .with_text_alignment(TextAlignment::Center)
+        // Set the style of the TextBundle itself.
+        .with_style(Style {
+            position_type: PositionType::Absolute,
+            top: Val::Px(105.0),
+            left: Val::Px(5.0),
+            // bottom:
+            // right: ,
+            ..default()
+        }),
+        TextStates::CharacterEnergy,
+        //CharacterEnergy,
+    ));
+
+    // CharacterHealth
+    commands.spawn((
+        // Create a TextBundle that has a Text with a list of sections.
+        TextBundle::from_section(
+            "Character Health: ",
+            TextStyle {
+                // This font is loaded and will be used instead of the default font.
+                font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                font_size,
+                ..default()
+            },
+        )
+        .with_text_alignment(TextAlignment::Center)
+        // Set the style of the TextBundle itself.
+        .with_style(Style {
+            position_type: PositionType::Absolute,
+            top: Val::Px(130.0),
+            left: Val::Px(5.0),
+            // bottom:
+            // right: ,
+            ..default()
+        }),
+        TextStates::CharacterHealth,
+        //CharacterHealth,
+    ));
+
+    // Population
+    commands.spawn((
+        // Create a TextBundle that has a Text with a list of sections.
+        TextBundle::from_section(
+            "Character Health: ",
+            TextStyle {
+                // This font is loaded and will be used instead of the default font.
+                font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                font_size,
+                ..default()
+            },
+        )
+        .with_text_alignment(TextAlignment::Center)
+        // Set the style of the TextBundle itself.
+        .with_style(Style {
+            position_type: PositionType::Absolute,
+            top: Val::Px(155.0),
+            left: Val::Px(5.0),
+            // bottom:
+            // right: ,
+            ..default()
+        }),
+        TextStates::YourPopulation,
+        //YourPopulation,
+    ));
+
+    // SkillCd
+    commands.spawn((
+        // Create a TextBundle that has a Text with a list of sections.
+        TextBundle::from_section(
+            "Skills Cooldown: ",
+            TextStyle {
+                // This font is loaded and will be used instead of the default font.
+                font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                font_size,
+                ..default()
+            },
+        )
+        .with_text_alignment(TextAlignment::Center)
+        // Set the style of the TextBundle itself.
+        .with_style(Style {
+            position_type: PositionType::Absolute,
+            top: Val::Px(180.0),
+            left: Val::Px(5.0),
+            // bottom:
+            // right: ,
+            ..default()
+        }),
+        TextStates::SkillCd,
+        //YourPopulation,
+    ));
+}
+
+pub fn fps_display(mut query: Query<&mut Text, With<FpsText>>, time: Res<Time>) {
+    for mut text in &mut query {
+        //println!("test: {:02}", );
+        let fps = 1.0 / time.delta_seconds();
+        if let Some(mut t) = text.sections.first_mut() {
+            t.value = format!("FPS: {:#0.0}", fps);
+        }
+    }
+}
+
+pub fn entities_count_display(
+    entities: Query<Entity>,
+    mut query: Query<&mut Text, With<EntitiesInWorld>>,
+    // time: Res<Time>,
+) {
+    for mut text in &mut query {
+        if let Some(mut t) = text.sections.first_mut() {
+            t.value = format!("Entities: {:#0.0}", entities.iter().count());
+        }
+    }
+}
+
+pub fn display_player_state(
+    mut query: Query<(&mut Text, &TextStates), With<TextStates>>,
+    player: Query<(&Health, &Energy, &Children, &SkillCd), With<IsPlayer>>,
+) {
+    let (health, energy, population, destroyed_microbes, destroyed_characters, skill_cd) =
+        if let Ok((health, energy, population, skill_cd)) = player.get_single() {
+            (
+                health.0,
+                energy.0,
+                (population.len() - 1) as f32,
+                0.0,
+                0.0,
+                skill_cd.0.percent_left() * 100.,
+            )
+        } else {
+            (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+        };
+    for (mut text_module, text_state) in query.iter_mut() {
+        match (text_module.sections.first_mut(), text_state) {
+            (Some(text), TextStates::CharacterHealth) => {
+                text.value = format!("Health: {:#0.0}", health)
+            }
+            (Some(text), TextStates::CharacterEnergy) => {
+                text.value = format!("Energy: {:#0.0}", energy)
+            }
+            (Some(text), TextStates::YourPopulation) => {
+                text.value = format!("Your Population: {:#0.0}", population)
+            }
+            (Some(text), TextStates::DestroyedMicrobes) => {
+                text.value = format!("Destroyed Microbes: {:#0.0}", destroyed_microbes)
+            }
+            (Some(text), TextStates::DestroyedCharacters) => {
+                text.value = format!("Destroyed Characters: {:#0.0}", destroyed_characters)
+            }
+            (Some(text), TextStates::SkillCd) => {
+                text.value = format!("Skills Cooldown: {:#0.0}%", skill_cd)
+            }
+            _ => (),
+        }
+    }
+}
