@@ -15,8 +15,9 @@ impl Plugin for CharacterPlugin {
         app
             .insert_resource(GameStatus::SpawnMenu)
             .insert_resource(PlayerEntityId(Entity::from_bits(1234234567u64)))
-            .insert_resource(WorldSize(250.))
+            .insert_resource(WorldSize(500.))
             .insert_resource(CharacterCollisionGroups::default())
+            .insert_resource(DestroyedEntities::default())
             .add_systems(Update, game_control)
             .add_systems(Update, character_spawner)
             .add_systems(Update, microbes_spawner)
@@ -29,6 +30,8 @@ impl Plugin for CharacterPlugin {
             .add_systems(Update, camera_scale)
             .add_systems(Update, draw_entities_points)
             .add_systems(Update, collision_events_handler)
+            .add_systems(Update, calc_power)
+            .add_systems(Update, bots)
             .insert_resource(MicrobeStats{
                 min_count: 0,
                 max_count: 3000,
@@ -37,7 +40,7 @@ impl Plugin for CharacterPlugin {
                 spawn_price: 20.0,
                 speed: 40.0,
                 spawn_radius_min: 2.5,
-                spawn_radius_max: 81.0,
+                spawn_radius_max: 50.0,
                 regeneration_health_rate_per_sec: 0.5,
             }) // 815
             .insert_resource(CharacterEnergyStats{
@@ -56,13 +59,13 @@ impl Plugin for CharacterPlugin {
                 size: 1.5,
                 health: 3000.0,
                 energy: 200.0,
-                speed: 1.0,
+                speed: 10.0,
                 regeneration_health_rate_per_sec: 5.0,
             })
             .add_systems(Update, fps_display)
             .add_systems(Update, entities_count_display)
             .add_systems(Update, display_player_state)
             //.add_systems(Update, energy_display)
-            .add_systems(Startup, test_text);
+            .add_systems(Startup, spawn_all_text);
     }
 }

@@ -1,7 +1,8 @@
 mod character;
 mod input;
 
-use bevy::prelude::*;
+use bevy::{prelude::*, window::WindowResized};
+use bevy::window::WindowResolution;
 use bevy_rapier2d::prelude::*;
 use bevy_vector_shapes::Shape2dPlugin;
 
@@ -15,7 +16,7 @@ fn main() {
         .add_plugins((
             DefaultPlugins,
             RapierPhysicsPlugin::<NoUserData>::pixels_per_meter(100.0),
-            RapierDebugRenderPlugin::default(),
+            //RapierDebugRenderPlugin::default(),
         ))
         .insert_resource(MenuCameraIs(false))
         .add_systems(Update, button_system)
@@ -40,15 +41,15 @@ pub struct MenuCameraIs(pub bool);
 
 pub fn setup(
     mut windows: Query<&mut Window>,
-    // mut commands: Commands,
     mut rapier_config: ResMut<RapierConfiguration>,
 ) {
     if let Ok(mut window) = windows.get_single_mut() {
         window.cursor.visible = true;
+        window.resizable = false;
+        window.resolution.set(1920., 1080.);
+        window.title = "Zombie Germs".to_string();
     }
     rapier_config.gravity = Vec2::ZERO; // For 2D
-
-    // commands.spawn((Camera2dBundle::default(), MenuCamera));
 }
 
 fn button_system(
@@ -61,9 +62,7 @@ fn button_system(
         ),
         (Changed<Interaction>, With<Button>),
     >,
-    //mut game_status: ResMut<GameStatus>,
     mut game_status: ResMut<GameStatus>,
-    // mut menu_camera_is: ResMut<MenuCameraIs>,
     mut commands: Commands,
     menu_camera: Query<Entity, With<MenuCamera>>,
     start_button: Query<Entity, With<StartButton>>,
@@ -80,7 +79,6 @@ fn button_system(
 
             if let Ok(camera) = menu_camera.get_single() {
                 commands.entity(camera).despawn_recursive();
-                // menu_camera_is.0 = false
             }
 
             return;
@@ -137,21 +135,17 @@ fn button_system(
     }
 
     for (interaction, mut color, mut border_color, children) in &mut interaction_query {
-        //let mut text = text_query.get_mut(children[0]).unwrap();
         match *interaction {
             Interaction::Pressed => {
                 *game_status = GameStatus::ResetGame;
-                //text.sections[0].value = "Press".to_string();
                 *color = PRESSED_BUTTON.into();
                 border_color.0 = Color::RED;
             }
             Interaction::Hovered => {
-                //text.sections[0].value = "Hover".to_string();
                 *color = HOVERED_BUTTON.into();
                 border_color.0 = Color::WHITE;
             }
             Interaction::None => {
-                //text.sections[0].value = "Button".to_string();
                 *color = NORMAL_BUTTON.into();
                 border_color.0 = Color::BLACK;
             }

@@ -10,11 +10,12 @@ pub struct Speed(pub f32);
 #[derive(Component, Deref, DerefMut, Default)]
 pub struct CountMicrobes(pub i32);
 
-#[derive(Component, Deref, DerefMut)]
-pub struct ParentEntityID(pub Entity);
+#[derive(Component, Deref, DerefMut, Default)]
+pub struct ParentEntityID(pub Option<Entity>);
 
-// #[derive(Component, Deref, DerefMut, Default)]
-// pub struct Orbit(pub f32);
+#[derive(Component, Deref, DerefMut, Default)]
+pub struct CharacterPower(pub f32);
+
 
 #[derive(Component, Deref, DerefMut, Default)]
 pub struct CombatState(pub bool);
@@ -25,6 +26,12 @@ pub struct ToSpawnMic(pub bool);
 #[derive(Component, Deref, DerefMut, Default)]
 pub struct Energy(pub f32);
 
+#[derive(Resource, Default)]
+pub struct DestroyedEntities {
+    pub destroyed_characters: u32,
+    pub destroyed_microbes: u32,
+}
+
 #[derive(Component, Deref, DerefMut, Default)]
 pub struct ChildColor(pub Color);
 
@@ -34,26 +41,11 @@ pub struct Target(pub Vec2);
 #[derive(Component, Deref, DerefMut, Default)]
 pub struct CursorTargets(pub (Option<Vec2>, Option<Vec2>));
 
-// #[derive(Component, Deref, DerefMut, Default)]
-// pub struct SkillTarget(pub Option<Vec2>);
-
-#[derive(Component, Deref, DerefMut, Default)]
-pub struct Targets(pub Vec<Vec2>);
-
-#[derive(Component, Deref, DerefMut, Default)]
-pub struct Microbes(pub Vec<Entity>);
-
 #[derive(Component, Default)]
 pub struct IsPlayer;
 
 #[derive(Component, Default)]
 pub struct IsCharacter;
-
-// #[derive(Component, Default)]
-// pub struct IsBot;
-
-// #[derive(Component, Default)]
-// pub struct DrawIt;
 
 #[derive(Component, Default)]
 pub struct Microbe;
@@ -69,11 +61,6 @@ pub struct CharacterCollisionGroup {
     pub parent_id: u32,
     pub child_id: u32,
 }
-// #[derive(Resource, Default)]
-// pub struct MineCollisionGroups {
-//     pub parent_id: u32,
-//     pub child_id: u32,
-// }
 
 #[derive(Component, Default)]
 pub struct SkillCd(pub Timer);
@@ -169,8 +156,6 @@ pub struct CharacterBundle {
     pub health: Health,
     pub speed: Speed,
     pub to_spawn_mic: ToSpawnMic,
-    // pub microbes: Microbes,
-    // pub draw_it: DrawIt,
     pub draw_stats: DrawStats,
     pub combat: CombatState,
     pub target: Target,
@@ -182,26 +167,22 @@ pub struct CharacterBundle {
     pub type_of_entity: TypeOfEntity,
     pub character: IsCharacter,
     pub character_collision_group: CharacterCollisionGroup,
+    pub parent_id: ParentEntityID,
     pub cursor_targets: CursorTargets,
     pub child_color: ChildColor,
-    // pub is_player: IsPlayer,
+    pub character_power: CharacterPower,
 }
 
 #[derive(Bundle)]
 pub struct MicrobeBundle {
     pub health: Health,
     pub is_microbe: Microbe,
-    // pub orbit: Orbit,
     pub draw_stats: DrawStats,
     pub target: Target,
     pub type_of_entity: TypeOfEntity,
     pub character_collision_group: CharacterCollisionGroup,
-    // pub targets: Targets,
-    // pub target: Target,
-    // pub skill_target: SkillTarget,
-    // pub rest_target: RestTarget,
-    // pub parent_id: ParentEntityID,
-    // pub is_bot: IsBot,
+    pub energy: Energy,
+    pub parent_id: ParentEntityID,
     pub skill: Skill,
 }
 
@@ -217,6 +198,7 @@ pub enum TextStates {
     DestroyedMicrobes,
     YourPopulation,
     SkillCd,
+    Power,
 }
 
 

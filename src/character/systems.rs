@@ -5,20 +5,21 @@ use super::components::*;
 use bevy_vector_shapes::prelude::*;
 use rand::Rng;
 use std::f32::consts::PI;
+use std::time::Duration;
 
 pub fn game_control(
-    // game_status: Res<GameStatus>,
     mut game_status: ResMut<GameStatus>,
-    //mut game_reset: ResMut<GameReset>,
-    //mut character_init: ResMut<CharacterInit>,
     mut commands: Commands,
     mut ccg: ResMut<CharacterCollisionGroups>,
     query: Query<Entity, With<IsCharacter>>,
     character_stats: Res<CharacterStats>,
     mut player_entity_id: ResMut<PlayerEntityId>,
+    mut destroyed_entities: ResMut<DestroyedEntities>,
 ) {
     match *game_status {
         GameStatus::ResetGame => {
+            destroyed_entities.destroyed_microbes = 0;
+            destroyed_entities.destroyed_characters = 0;
             ccg.0 = u32::MAX;
             for entity in query.iter() {
                 commands.entity(entity).despawn_recursive()
@@ -60,8 +61,10 @@ pub fn game_control(
                         parent_id: parent_group,
                         child_id: child_group,
                     },
+                    parent_id: ParentEntityID(None),
                     cursor_targets: Default::default(),
                     child_color: ChildColor(Color::GREEN),
+                    character_power: Default::default(),
                 })
                 .insert(CollisionGroups::new(
                     Group::from_bits_retain(parent_group),
@@ -144,8 +147,10 @@ pub fn character_spawner(
                     parent_id: parent_group,
                     child_id: child_group,
                 },
+                parent_id: ParentEntityID(None),
                 cursor_targets: Default::default(),
                 child_color: ChildColor(Color::BEIGE),
+                character_power: Default::default(),
             })
             .insert(CollisionGroups::new(
                 Group::from_bits_retain(parent_group),
@@ -220,21 +225,17 @@ pub fn microbes_spawner(
             while energy.0 > microbe_stats.spawn_price {
                 if children.len() >= microbe_stats.max_count as usize {
                     to_spawn_min.0 = false;
-                    println!("Too much children");
                     break;
                 }
                 energy.0 -= microbe_stats.spawn_price;
-                //Group::ALL & 1<<1
 
-                // test groups
                 let not_interact_with = (u32::MAX & !ccg.parent_id) & !ccg.child_id;
-                //not_interact = not_interact & !ccg.child_id;
 
                 let x =
-                    rng.gen_range(-microbe_stats.spawn_radius_max..microbe_stats.spawn_radius_max); // transform.translation.x +
+                    rng.gen_range(-microbe_stats.spawn_radius_max..microbe_stats.spawn_radius_max);
                 let y =
-                    rng.gen_range(-microbe_stats.spawn_radius_max..microbe_stats.spawn_radius_max); // transform.translation.y +
-                                                                                                    // u32 && self and parent = all other;
+                    rng.gen_range(-microbe_stats.spawn_radius_max..microbe_stats.spawn_radius_max);
+
                 let mut children_entity_commands = commands.spawn(RigidBody::Dynamic);
                 children_entity_commands
                     .insert(Velocity::zero())
@@ -252,22 +253,18 @@ pub fn microbes_spawner(
                             Health(microbe_stats.health / 2.0)
                         },
                         is_microbe: Default::default(),
-                        // orbit: Orbit(20. + i as f32),
                         draw_stats: DrawStats {
                             radius: microbe_stats.size,
                             color: child_color.0,
                         },
                         target: Default::default(),
-                        // skill_target: Default::default(),
-                        // rest_target: Default::default(),
-                        // parent_id: ParentEntityID(entity),
-                        // targets: Default::default(),
                         type_of_entity: Default::default(),
                         character_collision_group: CharacterCollisionGroup {
                             parent_id: ccg.parent_id,
                             child_id: ccg.child_id,
                         },
-                        //is_bot: IsBot(is_bot.0),
+                        energy: Default::default(),
+                        parent_id: ParentEntityID(Some(entity)),
                         skill: Default::default(),
                     })
                     .insert(Mover {
@@ -278,7 +275,7 @@ pub fn microbes_spawner(
                         stiffness: 2.0,
                         damper: 1.0,
                         rotation_speed: rng.gen_range(0.5..=2.),
-                        angle: rng.gen_range(0.0..=2. * PI), // random(0, 2 * PI)
+                        angle: rng.gen_range(0.0..=2. * PI),
                         radius: rng.gen_range(
                             microbe_stats.spawn_radius_min..=microbe_stats.spawn_radius_max,
                         ),
@@ -286,11 +283,6 @@ pub fn microbes_spawner(
                     })
                     .set_parent(entity);
 
-                //children_entity_commands.set_parent(entity);
-                // if let Some(mut entityCom) = commands.get_entity(entity) {
-                //     entityCom.add_child(children_entity_commands.id());
-                // };
-                //count_microbes += 1;
             }
 
             to_spawn_min.0 = false;
@@ -306,7 +298,7 @@ pub fn camera_scale(
         let scale = (microbes.len() as i32 / microbe_stats.max_count) as f32;
         let min: f32 = 0.1;
         let max: f32 = 1.1;
-        orthographic_projection.scale = min + scale * (max - min); // microbes as f32 * 0.005;
+        orthographic_projection.scale = min + scale * (max - min);
     }
 }
 
@@ -356,10 +348,25 @@ pub fn skill_process_time(
     }
 }
 
+pub fn calc_power (
+    mut characters: Query<(&Children, &IsBot, &mut CharacterPower), With<IsCharacter>>,
+    microbe_stats: Res<MicrobeStats>,
+) {
+    for (children, is_bot, mut power) in characters.iter_mut() {
+        let mut p = 0f32;
+        if is_bot.0 {
+            p = children.len() as f32 * microbe_stats.health;
+        } else {
+            p = children.len() as f32 * (microbe_stats.health / 2.);
+        }
+
+        power.0 = p;
+    }
+}
+
 pub fn skill_to_children(
-    characters: Query<(&Skill, &Children, &Transform, &CursorTargets), With<IsCharacter>>, //   &IsBot, is_bot, , Changed<Skill>
+    characters: Query<(&Skill, &Children, &Transform, &CursorTargets), With<IsCharacter>>,
     mut microbes_query: Query<(&mut Skill), (With<Microbe>, Without<IsCharacter>)>,
-    //cursor: Res<Cursor>,
     microbe_stats: Res<MicrobeStats>,
 ) {
     for (skill, children, parent_transform, cursor_targets) in characters.iter() {
@@ -373,7 +380,6 @@ pub fn skill_to_children(
                     microbe_stats.spawn_radius_min + 150.,
                     microbe_stats.spawn_radius_max,
                 );
-                // println!("curr rad {}", cur_radius);
                 skill_to_child = Skill::Rest(cur_radius);
             }
             Skill::TargetAttack(_, _) => {
@@ -388,9 +394,6 @@ pub fn skill_to_children(
                 skill_to_child = Skill::TargetAttack(new_tar, damper);
             }
             Skill::FollowCursor(_) => {
-                // if !is_bot.0 {
-                //     cursor_targets.0.0 = Some(cursor.0 - parent_transform.translation.xy());
-                // }
 
                 let new_tar = match cursor_targets.0 {
                     (Some(target1), None) => Some(target1 - parent_transform.translation.xy()),
@@ -406,11 +409,11 @@ pub fn skill_to_children(
                         (
                             Some(target1 - parent_transform.translation.xy()),
                             Some(Vec2::default()),
-                        ) // parent pos = Vec2::default() (0.,0.,)
+                        )
                     }
                     (None, Some(target2)) => {
                         (
-                            Some(Vec2::default()), // parent pos = Vec2::default() (0.,0.,)
+                            Some(Vec2::default()),
                             Some(target2 - parent_transform.translation.xy()),
                         )
                     }
@@ -451,24 +454,19 @@ pub fn seek_system(
         (
             &Transform,
             &Skill,
-            // &mut Targets,
             &mut Target,
             &mut Mover,
             &mut Velocity,
-            // &IsBot,
         ),
         With<Microbe>,
     >,
-    // characters_query: Query<(&Target, &CombatState, &Transform), Without<Microbe>>,
     time: Res<Time>,
-    // cursor: Res<Cursor>,
     microbe_stats: Res<MicrobeStats>,
-    // mut painter: ShapePainter,
 ) {
     let max_dist_to_points = 5.;
     let mut force: Vec2 = Vec2::default();
     let mut rng = rand::thread_rng();
-    for (microbe_transform, skill, mut microbe_target, mut mover, mut vel) in //  is_bot
+    for (microbe_transform, skill, mut microbe_target, mut mover, mut vel) in
         microbes_query.iter_mut()
     {
         match skill {
@@ -480,21 +478,20 @@ pub fn seek_system(
                 mover.radius = (mover.radius + rng.gen_range(-3..=3) as f32).clamp(
                     microbe_stats.spawn_radius_min,
                     microbe_stats.spawn_radius_max,
-                ); // 150.;// *max_radius
+                );
 
                 let speed_factor = scale_value(
                     mover.radius,
                     microbe_stats.spawn_radius_min,
                     microbe_stats.spawn_radius_max,
-                    //*max_radius,
                     1.,
                     0.1,
                 );
 
                 mover.angle =
-                    (cur_angle + PI / 12. * (mover.rotation_speed * speed_factor)) % (PI * 2.); // mover.rotation_speed rng.gen_range(0.0..PI/12.) * time.delta_seconds()
-                microbe_target.x = mover.radius * mover.angle.cos(); // mover.radius mover.angle.cos()
-                microbe_target.y = mover.radius * mover.angle.sin(); // (mover.speed * time.delta().as_secs_f32())
+                    (cur_angle + PI / 12. * (mover.rotation_speed * speed_factor)) % (PI * 2.);
+                microbe_target.x = mover.radius * mover.angle.cos();
+                microbe_target.y = mover.radius * mover.angle.sin();
                 let displacement = microbe_target.0 - microbe_transform.translation.xy();
                 force = mover.stiffness * displacement - mover.damper * mover.vel;
             }
@@ -561,11 +558,19 @@ pub fn draw_entities(mut painter: ShapePainter, draw_data: Query<(&GlobalTransfo
 
 pub fn collision_events_handler(
     mut collision_events: EventReader<CollisionEvent>,
-    mut entities_query: Query<(&mut Health, &TypeOfEntity, &CharacterCollisionGroup)>, // Entity Some(entity, mut health, collider_handel)
+    mut entities_query: Query<(
+        &mut Health,
+        &TypeOfEntity,
+        &CharacterCollisionGroup,
+        &ParentEntityID,
+        &mut Energy,
+    )>,
     mut cmd: Commands,
     mut ccg: ResMut<CharacterCollisionGroups>,
     mut game_status: ResMut<GameStatus>,
     mut player_entity_id: ResMut<PlayerEntityId>,
+    mut character_energy_stats: Res<CharacterEnergyStats>,
+    mut destroyed_entities: ResMut<DestroyedEntities>,
 ) {
     match *game_status {
         GameStatus::Game => (),
@@ -576,23 +581,38 @@ pub fn collision_events_handler(
         match collision_event {
             CollisionEvent::Started(collider1, collider2, _) => {
                 let health_entity_one =
-                    if let Ok((entity_health, _, _)) = entities_query.get(*collider1) {
-                        entity_health.0
+                    if let Ok((entity_health, m_t, _, p_i, _)) = entities_query.get(*collider1) {
+                        let id = if let Some(id) = p_i.0 {
+                            id
+                        } else {
+                            Entity::from_bits(u64::MAX)
+                        };
+                        (true, entity_health.0, m_t.eq(&TypeOfEntity::Character), id)
                     } else {
-                        0.
+                        (false, 0.0, false, Entity::from_bits(u64::MAX))
                     };
 
                 let health_entity_two =
-                    if let Ok((entity_health, _, _)) = entities_query.get(*collider2) {
-                        entity_health.0
+                    if let Ok((entity_health, m_t, _, p_i, _)) = entities_query.get(*collider2) {
+                        let id = if let Some(id) = p_i.0 {
+                            id
+                        } else {
+                            Entity::from_bits(u64::MAX)
+                        };
+                        (true, entity_health.0, m_t.eq(&TypeOfEntity::Character), id)
                     } else {
-                        0.
+                        (false, 0.0, false, Entity::from_bits(u64::MAX))
                     };
 
-                if let Ok((mut my_health, my_type, character_collision_group)) =
-                    entities_query.get_mut(*collider1)
+                if let Ok((
+                    mut my_health,
+                    my_type,
+                    character_collision_group,
+                    parent_entity_id,
+                    mut energy,
+                )) = entities_query.get_mut(*collider1)
                 {
-                    my_health.0 = my_health.0 - health_entity_two;
+                    my_health.0 = my_health.0 - health_entity_two.1;
 
                     let no_health = my_health.0 <= 0.0;
 
@@ -600,20 +620,61 @@ pub fn collision_events_handler(
                         (true, TypeOfEntity::Character) => {
                             bit_map_group_back(&mut ccg.0, character_collision_group.parent_id);
                             bit_map_group_back(&mut ccg.0, character_collision_group.child_id);
+
+                            // when player dead
                             if player_entity_id.0.eq(collider1) {
                                 *game_status = GameStatus::SpawnMenu;
                             }
+
+                            // when player kill character
+                            if health_entity_two.3.eq(&player_entity_id.0) {
+                                destroyed_entities.destroyed_characters += 1;
+                            }
+
                             cmd.entity(*collider1).despawn_recursive()
                         }
-                        (true, TypeOfEntity::Microbe) => cmd.entity(*collider1).despawn_recursive(),
+                        (true, TypeOfEntity::Microbe) => {
+
+                            // when player microbe die
+                            if let Some(per_ent_id) = parent_entity_id.0 {
+                                if player_entity_id.0.eq(&per_ent_id) {
+                                    energy.0 += (character_energy_stats
+                                        .character_microbes_die_energy_back)
+                                        .min(character_energy_stats.max_count)
+                                }
+                            }
+
+                            // when player kill microbe
+                            if player_entity_id.0.eq(&collider2) {
+                                destroyed_entities.destroyed_microbes += 1;
+                                energy.0 += (character_energy_stats
+                                    .enemy_microbes_kill_energy_reward)
+                                    .min(character_energy_stats.max_count)
+                            }
+
+                            // when player kill microbe
+                            if player_entity_id.0.eq(&health_entity_two.3) {
+                                destroyed_entities.destroyed_microbes += 1;
+                                energy.0 += (character_energy_stats
+                                    .enemy_microbes_kill_energy_reward)
+                                    .min(character_energy_stats.max_count)
+                            }
+
+                            cmd.entity(*collider1).despawn_recursive();
+                        }
                         _ => (),
                     }
                 }
 
-                if let Ok((mut my_health, my_type, character_collision_group)) =
-                    entities_query.get_mut(*collider2)
+                if let Ok((
+                    mut my_health,
+                    my_type,
+                    character_collision_group,
+                    parent_entity_id,
+                    mut energy,
+                )) = entities_query.get_mut(*collider2)
                 {
-                    my_health.0 = my_health.0 - health_entity_one;
+                    my_health.0 = my_health.0 - health_entity_one.1;
 
                     let no_health = my_health.0 <= 0.0;
                     match (no_health, my_type) {
@@ -621,12 +682,47 @@ pub fn collision_events_handler(
                             bit_map_group_back(&mut ccg.0, character_collision_group.parent_id);
                             bit_map_group_back(&mut ccg.0, character_collision_group.child_id);
 
+                            // when player die
                             if player_entity_id.0.eq(collider2) {
                                 *game_status = GameStatus::SpawnMenu;
                             }
+
+                            // when player kill character
+                            if health_entity_one.3.eq(&player_entity_id.0) {
+                                destroyed_entities.destroyed_characters += 1;
+                            }
+
                             cmd.entity(*collider2).despawn_recursive()
                         }
-                        (true, TypeOfEntity::Microbe) => cmd.entity(*collider2).despawn_recursive(),
+                        (true, TypeOfEntity::Microbe) => {
+
+                            // when player microbe die
+                            if let Some(per_ent_id) = parent_entity_id.0 {
+                                if player_entity_id.0.eq(&per_ent_id) {
+                                    energy.0 += (character_energy_stats
+                                        .character_microbes_die_energy_back)
+                                        .min(character_energy_stats.max_count)
+                                }
+                            }
+
+                            // when player kill microbe
+                            if player_entity_id.0.eq(&collider1) {
+                                destroyed_entities.destroyed_microbes += 1;
+                                energy.0 += (character_energy_stats
+                                    .enemy_microbes_kill_energy_reward)
+                                    .min(character_energy_stats.max_count)
+                            }
+
+                            // when player kill microbe
+                            if player_entity_id.0.eq(&health_entity_one.3) {
+                                destroyed_entities.destroyed_microbes += 1;
+                                energy.0 += (character_energy_stats
+                                    .enemy_microbes_kill_energy_reward)
+                                    .min(character_energy_stats.max_count)
+                            }
+
+                            cmd.entity(*collider2).despawn_recursive()
+                        }
                         _ => (),
                     }
                 }
@@ -654,7 +750,6 @@ pub fn draw_entities_points(
                 painter.circle(1.);
             }
             (None, Some(point2)) => {
-                //painter.transform.translation = point1.extend(0.);
                 painter.color = point_two_color;
                 painter.transform.translation = point2.extend(0.);
                 painter.circle(1.);
@@ -662,17 +757,12 @@ pub fn draw_entities_points(
             (Some(point1), None) => {
                 painter.color = point_one_color;
                 painter.transform.translation = point1.extend(0.);
-                //painter.transform.translation = point2.extend(0.);
                 painter.circle(1.);
             }
             _ => (),
         }
     }
 }
-
-// fn custom_cos_0_1_0(x: f32) -> f32 {
-//     0.5 * (1.0 + (x * 2.0 * PI + PI).cos())
-// }
 
 fn bit_map_group_take(store: &mut u32) -> u32 {
     // &mut u32
@@ -689,23 +779,7 @@ fn bit_map_group_back(store: &mut u32, group: u32) {
     *store = *store | group
 }
 
-// fn text_update_system(
-//     diagnostics: Res<DiagnosticsStore>,
-//     mut query: Query<&mut Text, With<FpsText>>,
-// ) {
-//     for mut text in &mut query {
-//         if let Some(fps) = diagnostics.get(FrameTimeDiagnosticsPlugin::FPS) {
-//             if let Some(value) = fps.smoothed() {
-//                 // Update the value of the second section
-//                 text.sections[1].value = format!("{value:.2}");
-//             }
-//         }
-//     }
-// }
-
-pub fn test_text(mut commands: Commands, asset_server: Res<AssetServer>) {
-    // FPS
-    // #[cfg(feature = "default_font")]
+pub fn spawn_all_text(mut commands: Commands, asset_server: Res<AssetServer>) {
 
     let font_size = 24.0;
 
@@ -886,7 +960,6 @@ pub fn test_text(mut commands: Commands, asset_server: Res<AssetServer>) {
             ..default()
         }),
         TextStates::YourPopulation,
-        //YourPopulation,
     ));
 
     // SkillCd
@@ -907,18 +980,36 @@ pub fn test_text(mut commands: Commands, asset_server: Res<AssetServer>) {
             position_type: PositionType::Absolute,
             top: Val::Px(180.0),
             left: Val::Px(5.0),
-            // bottom:
-            // right: ,
             ..default()
         }),
         TextStates::SkillCd,
-        //YourPopulation,
+    ));
+    // Power
+    commands.spawn((
+        // Create a TextBundle that has a Text with a list of sections.
+        TextBundle::from_section(
+            "Power: ",
+            TextStyle {
+                // This font is loaded and will be used instead of the default font.
+                font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                font_size,
+                ..default()
+            },
+        )
+        .with_text_alignment(TextAlignment::Center)
+        // Set the style of the TextBundle itself.
+        .with_style(Style {
+            position_type: PositionType::Absolute,
+            top: Val::Px(205.0),
+            left: Val::Px(5.0),
+            ..default()
+        }),
+        TextStates::Power,
     ));
 }
 
 pub fn fps_display(mut query: Query<&mut Text, With<FpsText>>, time: Res<Time>) {
     for mut text in &mut query {
-        //println!("test: {:02}", );
         let fps = 1.0 / time.delta_seconds();
         if let Some(mut t) = text.sections.first_mut() {
             t.value = format!("FPS: {:#0.0}", fps);
@@ -929,7 +1020,6 @@ pub fn fps_display(mut query: Query<&mut Text, With<FpsText>>, time: Res<Time>) 
 pub fn entities_count_display(
     entities: Query<Entity>,
     mut query: Query<&mut Text, With<EntitiesInWorld>>,
-    // time: Res<Time>,
 ) {
     for mut text in &mut query {
         if let Some(mut t) = text.sections.first_mut() {
@@ -940,20 +1030,28 @@ pub fn entities_count_display(
 
 pub fn display_player_state(
     mut query: Query<(&mut Text, &TextStates), With<TextStates>>,
-    player: Query<(&Health, &Energy, &Children, &SkillCd), With<IsPlayer>>,
+    player: Query<(&Health, &Energy, &Children, &SkillCd, &CharacterPower), With<IsPlayer>>,
+    mut game_status: ResMut<GameStatus>,
+    destroyed_entities: Res<DestroyedEntities>,
 ) {
-    let (health, energy, population, destroyed_microbes, destroyed_characters, skill_cd) =
-        if let Ok((health, energy, population, skill_cd)) = player.get_single() {
+    match *game_status {
+        GameStatus::Game => (),
+        _ => return,
+    }
+
+    let (health, energy, population, destroyed_microbes, destroyed_characters, skill_cd, power) =
+        if let Ok((health, energy, population, skill_cd, char_power)) = player.get_single() {
             (
                 health.0,
                 energy.0,
                 (population.len() - 1) as f32,
-                0.0,
-                0.0,
+                destroyed_entities.destroyed_microbes as f32,
+                destroyed_entities.destroyed_characters as f32,
                 skill_cd.0.percent_left() * 100.,
+                char_power.0,
             )
         } else {
-            (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+            (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
         };
     for (mut text_module, text_state) in query.iter_mut() {
         match (text_module.sections.first_mut(), text_state) {
@@ -974,8 +1072,76 @@ pub fn display_player_state(
             }
             (Some(text), TextStates::SkillCd) => {
                 text.value = format!("Skills Cooldown: {:#0.0}%", skill_cd)
+            },
+            (Some(text), TextStates::Power) => {
+                text.value = format!("Power: {:#0.0}", power)
             }
             _ => (),
+        }
+    }
+}
+
+
+pub fn bots (
+    mut characters: Query<(&mut Transform, &mut Energy, &mut ToSpawnMic, &mut SkillCd, &mut Skill, &mut CursorTargets, &CharacterPower, &Speed), (With<IsCharacter>, Without<IsPlayer>)>,
+    mut player: Query<(&Transform, &CharacterPower), With<IsPlayer>>,
+    time: Res<Time>,
+    skills_cd: Res<SkillsCd>,
+    microbe_stats: Res<MicrobeStats>,
+) {
+    if let Ok((p_trans, p_power)) = player.get_single() {
+        for (mut transform,
+            mut energy,
+            mut toSpawnMic,
+            mut skillCd,
+            mut skill,
+            mut cursorTargets,
+            characterPower,
+            speed
+        ) in characters.iter_mut() {
+            let new_pos = (p_trans.translation - transform.translation).normalize_or_zero() * speed.0 * time.delta_seconds();
+            transform.translation += new_pos;
+
+            let dis = p_trans.translation.distance(transform.translation);
+
+            if time.elapsed_seconds() as i32 % 6 == 0 {
+                toSpawnMic.0 = true;
+            }
+
+            if dis <= microbe_stats.spawn_radius_max {
+                cursorTargets.0.0 = Some(p_trans.translation.xy());
+
+                if !skillCd.0.finished() {
+                    return
+                }
+
+                if (time.elapsed_seconds() as i32 % skills_cd.target_attack as i32 == 0) && (energy.0 > 150.0) {
+                    energy.0 -= 100.0;
+                    *skill = Skill::TargetAttack(None, 2.);
+                    skillCd
+                        .0
+                        .set_duration(Duration::from_secs_f32(skills_cd.target_attack));
+                    skillCd.0.reset();
+                }
+
+                if (time.elapsed_seconds() as i32 % skills_cd.follow_cursor as i32 == 0) && (energy.0 > 150.0) {
+                    energy.0 -= 100.0;
+                    *skill = Skill::FollowCursor(None);
+                    skillCd
+                        .0
+                        .set_duration(Duration::from_secs_f32(skills_cd.follow_cursor));
+                    skillCd.0.reset();
+                }
+
+                if (time.elapsed_seconds() as i32 % skills_cd.patrolling as i32 == 0) && (energy.0 > 150.0) {
+                    energy.0 -= 100.0;
+                    *skill = Skill::Patrolling(None, None);
+                    skillCd
+                        .0
+                        .set_duration(Duration::from_secs_f32(skills_cd.patrolling));
+                    skillCd.0.reset();
+                }
+            }
         }
     }
 }

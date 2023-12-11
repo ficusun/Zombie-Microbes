@@ -27,3 +27,12 @@ codegen-units = 1
 [profile.dist]
 inherits = "release"
 lto = "thin"
+
+#[dependencies.wasm-bindgen]
+#version = "0.2.89"
+#features = ["serde-serialize"]
+#
+#[target.x86_64-pc-windows-gnu]
+#linker = "x86_64-w64-mingw32-gcc"
+#[lib]
+#crate-type = ["cdylib", "rlib"]
